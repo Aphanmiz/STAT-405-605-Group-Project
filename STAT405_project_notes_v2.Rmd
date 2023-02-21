@@ -11,38 +11,37 @@ Try executing this chunk by clicking the *Run* button within the chunk or by pla
 ########## Box and whisker
 
 ## Import data
-car_crashes <- read.csv("Motor_Vehicle_Collisions_-_Crashes.csv")
+data.all <- read.csv("Motor_Vehicle_Collisions_-_Crashes.csv")
 
 ## Feature engineering
-car_crashes[car_crashes$CONTRIBUTING.FACTOR.VEHICLE.1 %in% c("Cell Phone (hands-free)","Cell Phone (hand-Held)","Other Electronic Device","Texting","Cell Phone (hand-held)"),]$CONTRIBUTING.FACTOR.VEHICLE.1 <- "Cell phone/electronic"
+data.all[data.all$CONTRIBUTING.FACTOR.VEHICLE.1 %in% c("Cell Phone (hands-free)","Cell Phone (hand-Held)","Other Electronic Device","Texting","Cell Phone (hand-held)"),]$CONTRIBUTING.FACTOR.VEHICLE.1 <- "Cell phone/electronic"
 
-car_crashes[car_crashes$CONTRIBUTING.FACTOR.VEHICLE.1 %in% c("Illnes","Illness","Physical Disability","Prescription medication"),]$CONTRIBUTING.FACTOR.VEHICLE.1 <- "Medical"
+data.all[data.all$CONTRIBUTING.FACTOR.VEHICLE.1 %in% c("Illnes","Illness","Physical Disability","Prescription medication"),]$CONTRIBUTING.FACTOR.VEHICLE.1 <- "Medical"
 
-car_crashes[car_crashes$CONTRIBUTING.FACTOR.VEHICLE.1 %in% c("Drugs (illegal)"),]$CONTRIBUTING.FACTOR.VEHICLE.1 <- "Drugs (Illegal)"
+data.all[data.all$CONTRIBUTING.FACTOR.VEHICLE.1 %in% c("Drugs (illegal)"),]$CONTRIBUTING.FACTOR.VEHICLE.1 <- "Drugs (Illegal)"
 
-car_crashes[car_crashes$CONTRIBUTING.FACTOR.VEHICLE.1 %in% c("Reaction to Other Uninvolved Vehicle"),]$CONTRIBUTING.FACTOR.VEHICLE.1 <- "Reaction to Uninvolved Vehicle"
+data.all[data.all$CONTRIBUTING.FACTOR.VEHICLE.1 %in% c("Reaction to Other Uninvolved Vehicle"),]$CONTRIBUTING.FACTOR.VEHICLE.1 <- "Reaction to Uninvolved Vehicle"
 
-car_crashes[car_crashes$CONTRIBUTING.FACTOR.VEHICLE.1 %in% c("Fatigued/Drowsy","Fell Asleep","Lost Consciousness"),]$CONTRIBUTING.FACTOR.VEHICLE.1 <- "Fatigued/drowsy/sleep/unconscious"
+data.all[data.all$CONTRIBUTING.FACTOR.VEHICLE.1 %in% c("Fatigued/Drowsy","Fell Asleep","Lost Consciousness"),]$CONTRIBUTING.FACTOR.VEHICLE.1 <- "Fatigued/drowsy/sleep/unconscious"
 
-car_crashes[car_crashes$CONTRIBUTING.FACTOR.VEHICLE.1 %in% c("80","1",""),]$CONTRIBUTING.FACTOR.VEHICLE.1 <- "Unknown"
+data.all[data.all$CONTRIBUTING.FACTOR.VEHICLE.1 %in% c("80","1",""),]$CONTRIBUTING.FACTOR.VEHICLE.1 <- "Unknown"
 
 
 ## Get rid of NAs in columns of interest
-car_crashes <- car_crashes[complete.cases(car_crashes),c("CONTRIBUTING.FACTOR.VEHICLE.1","NUMBER.OF.PERSONS.INJURED")]
+data.all <- data.all[complete.cases(data.all),c("CONTRIBUTING.FACTOR.VEHICLE.1","NUMBER.OF.PERSONS.INJURED")]
 
 
 ## Get the number of crashes with each contributing factor
-contr_factor_counts <- aggregate(car_crashes$NUMBER.OF.PERSONS.INJURED, by=list(car_crashes$CONTRIBUTING.FACTOR.VEHICLE.1), FUN=sum)
+contr_factor_counts <- aggregate(data.all$NUMBER.OF.PERSONS.INJURED, by=list(data.all$CONTRIBUTING.FACTOR.VEHICLE.1), FUN=sum)
 
 ## Find the 10 contributing factors with the most rows
 top_10_contr_factors <- contr_factor_counts[order(-contr_factor_counts$x),][1:10,"Group.1"]
 
 ## Select only rows where the contributing factor is one of the top 10 contributing factors
-car_crashes_top_factors <- subset(car_crashes,car_crashes$CONTRIBUTING.FACTOR.VEHICLE.1 %in% top_10_contr_factors)
+car_crashes_top_factors <- subset(data.all,data.all$CONTRIBUTING.FACTOR.VEHICLE.1 %in% top_10_contr_factors)
 
 
-## Boxplot of top 10 most common contributing factors' mean injuries
-png(file = "boxplot.png", width = 1400, height = 800, pointsize = 10)        
+## Boxplot of top 10 most common contributing factors' mean injuries       
 par(mar=c(10,5,2,2),xaxt="n")
 boxplot(car_crashes_top_factors$NUMBER.OF.PERSONS.INJURED ~ car_crashes_top_factors$CONTRIBUTING.FACTOR.VEHICLE.1,xlab="Contributing factor",ylab="Number of persons injured",main="Boxplot of number of persons injured for 10 most common contributing factors in car accidents",outline=FALSE)
 axis(1, at=seq(1, 10, by=1), labels = FALSE)
@@ -56,9 +55,6 @@ dev.off()
 
 ########## dot plot
 png(file = "logdotchart.png", width = 1400, height = 800, pointsize = 15) 
-contr_factor_counts <- car_crashes %>%
-        group_by(CONTRIBUTING.FACTOR.VEHICLE.1) %>%
-        tally()
 dotchart(contr_factor_counts$n,labels=contr_factor_counts$CONTRIBUTING.FACTOR.VEHICLE.1,
          main="Number of car crashes by contributing factor",
          xlab="Numer of car crashes",ylab="Contributing factor",
