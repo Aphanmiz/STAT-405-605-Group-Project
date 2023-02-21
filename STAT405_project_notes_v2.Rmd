@@ -41,7 +41,8 @@ top_10_contr_factors <- contr_factor_counts[order(-contr_factor_counts$x),][1:10
 car_crashes_top_factors <- subset(data.all,data.all$CONTRIBUTING.FACTOR.VEHICLE.1 %in% top_10_contr_factors)
 
 
-## Boxplot of top 10 most common contributing factors' mean injuries       
+## Boxplot of top 10 most common contributing factors' mean injuries 
+png(file = "boxplot.png", width = 1400, height = 800, pointsize = 10) 
 par(mar=c(10,5,2,2),xaxt="n")
 boxplot(car_crashes_top_factors$NUMBER.OF.PERSONS.INJURED ~ car_crashes_top_factors$CONTRIBUTING.FACTOR.VEHICLE.1,xlab="Contributing factor",ylab="Number of persons injured",main="Boxplot of number of persons injured for 10 most common contributing factors in car accidents",outline=FALSE)
 axis(1, at=seq(1, 10, by=1), labels = FALSE)
