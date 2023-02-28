@@ -17,6 +17,7 @@ Figure \ref{fig:fig-1} describes blah blah blah...
 <<echo=FALSE,fig.width=7,fig.height=5>>=
 
 #0. Import library
+
 library(ggmap) #Retrieve raster map tiles from popular mapping services
 library(osmdata) #OpenStreetMap data 
 library(pacman) #Base library > intuitively named functions
@@ -25,9 +26,11 @@ library(leaflet)
 library(rgdal)
 library(tidyr)
 
+library(ggridges)
+
 #1. Import data
 nyc_crash = read.csv('./data/Motor_Vehicle_Collisions_Crashes.csv')
-# str(nyc_crash)
+str(nyc_crash)
 
 #2. Clean data - get rid of NA
 nyc_crash %>% 
@@ -42,16 +45,17 @@ nyc_map <- lisbon_map <- get_map( getbb('new york city'), source="stamen") #Goog
 
 g <- ggmap(nyc_map)
 
-dist_map <- g + geom_point(data=nyc_crash_noNA, aes(x=LONGITUDE, y=LATITUDE),size=0.0001, alpha=0.1, color="blue")
+# Map the crash occurance on the map
+dist_map <- g + geom_point(data=nyc_crash_noNA, aes(x=LONGITUDE, y=LATITUDE),size=0.0001, alpha=0.1, color="blue") + labs(title = "Geographical Distribution of Crash Occurances", y = "LONGITUDE", x = "LATITUDE")
+
 print(dist_map)
 
-countour_map <- g + stat_density2d(
-    aes(x = LONGITUDE, y = LATITUDE, fill = ..level.., alpha = ..level..),
+# 
+countour_map <- g  + stat_density2d(
+    aes(x = LONGITUDE, y = LATITUDE, fill = ..level.., alpha = 0.1),
     size = 0.1, bins = 40, data = nyc_crash_noNA,
     geom = "polygon"
-  ) +
-  geom_density2d(data = nyc_crash_noNA, 
-               aes(x = LONGITUDE, y = LATITUDE), size = 0.3)
+  ) + geom_density2d(data = nyc_crash_noNA, aes(x = LONGITUDE, y = LATITUDE), size = 0.3) + labs(title = "Countour Map of Crash Occurances", y = "LONGITUDE", x = "LATITUDE")
 print(countour_map)
 # Interactive NYC
 
@@ -72,6 +76,19 @@ print(countour_map)
 #   #   )
 # 
 # map1
+
+
+
+# Q2 - GG plot
+
+
+ggplot(data=nyc_crash, aes(x = NUM_INJURED , y = BOROUGH)) +
+  geom_density_ridges(aes(fill = BOROUGH), scale = 0.6) +
+  scale_fill_manual(values = c("#00AFBB", "#E7B800", "#FC4E07","green","purple","grey")) +  xlim(-1,5)
+
+# ggplot(data=nyc_crash, aes(x = NUM_KILLED , y = BOROUGH)) +
+#   geom_density_ridges(aes(fill = BOROUGH), scale = 0.6) +
+#   scale_fill_manual(values = c("#00AFBB", "#E7B800", "#FC4E07","green","purple","grey")) +  xlim(-1,5)
 @
 
 \end{center}
