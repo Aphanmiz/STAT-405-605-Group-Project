@@ -1,0 +1,59 @@
+---
+title: "final draft stuff"
+output:
+  pdf_document: default
+  html_document: default
+date: "2023-03-23"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE)
+```
+
+```{r}
+library(RSQLite)
+library(ggplot2)
+dcon <- dbConnect(SQLite(), dbname = "projectDB.db")
+
+dbListTables(dcon)
+
+res <- dbSendQuery(conn = dcon, "
+SELECT CONTRIBUTINGFACTORVEHICLE1, VEHICLETYPECODE1, CAST(SUBSTR(CRASHDATE,-4) AS INT)
+FROM tableCrashes
+WHERE CONTRIBUTINGFACTORVEHICLE1 IN ('Following Too Closely', 'Driver Inattention/Distraction', 'Failure to Yield Right-of-Way', 'Backing Unsafely', 'Other Vehicular') 
+AND VEHICLETYPECODE1 IN ('Pick-up Truck', 'PASSENGER VEHICLE', 'BUS', 'Box Truck', 'Bike', 'Sedan')
+AND CAST(SUBSTR(CRASHDATE,-4) AS INT) >= 2020
+;
+")
+mydf <- dbFetch(res, -1)
+dbClearResult(res)
+require(scales)
+ggplot(mydf) + aes(CONTRIBUTINGFACTORVEHICLE1, fill = VEHICLETYPECODE1) +
+  geom_bar(aes(y = (..count..)/sum(..count..)), width = 0.5) + 
+  scale_y_continuous(labels = percent) +
+  ylab("Percent") + xlab("Contributing Crash Factor") + 
+  scale_fill_manual(values=c("black", "purple", "yellow", "green",
+                                      "blue", "darkgreen")) + 
+ggtitle("Top 5 Contributing Crash Factor with Top Vehicle Types from 2020")
+
+
+res <- dbSendQuery(conn = dcon, "
+SELECT CONTRIBUTINGFACTORVEHICLE1, VEHICLETYPECODE1, CAST(SUBSTR(CRASHDATE,-4) AS INT)
+FROM tableCrashes
+WHERE CONTRIBUTINGFACTORVEHICLE1 IN ('Following Too Closely', 'Driver Inattention/Distraction', 'Failure to Yield Right-of-Way', 'Backing Unsafely', 'Other Vehicular') 
+AND VEHICLETYPECODE1 IN ('Pick-up Truck', 'PASSENGER VEHICLE', 'BUS', 'Box Truck', 'Bike', 'Sedan')
+AND CAST(SUBSTR(CRASHDATE,-4) AS INT) < 2020
+;
+")
+mydf <- dbFetch(res, -1)
+dbClearResult(res)
+require(scales)
+ggplot(mydf) + aes(CONTRIBUTINGFACTORVEHICLE1, fill = VEHICLETYPECODE1) +
+  geom_bar(aes(y = (..count..)/sum(..count..)), width = 0.5) + 
+  scale_y_continuous(labels = percent) +
+  ylab("Percent") + xlab("Contributing Crash Factor") + 
+  scale_fill_manual(values=c("black", "purple", "yellow", "green",
+                                      "blue", "darkgreen")) + 
+ggtitle("Top 5 Contributing Crash Factor with Top Vehicle Types before 2020")
+
+```

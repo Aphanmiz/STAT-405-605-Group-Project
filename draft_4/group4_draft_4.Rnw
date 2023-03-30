@@ -1,3 +1,4 @@
+% Meta Setting
 \documentclass[10pt]{article}
 
 % Formatting packages below.
@@ -10,11 +11,13 @@
 
 \begin{document}
 \SweaveOpts{concordance=TRUE}
-\title{Interpreting The Effect Of COVID On Motor Vehicle Accidents in the New York Metropolitan Area}
+\title{Interpreting The Effect Of COVID On Motor Vehicle Accidents in the New York Metropolitan Area (SQL Integration)}
 \author{Jian Ruan, Zach Yu, Carrie Hashimoto, Sophia Lyu (Undergraduate), Patrick Yee (Graduate)}
 \maketitle
 
-% Install some packages
+%-----------------------------------------------------------------------
+
+% Install packages & Setup Libraries
 <<install_packs, eval=TRUE, dev="png", echo=FALSE>>=
 # # UNCOMMENT THIS CELL IF RUNNING ON A NEW MACHINE
 # packs <- c("`ae.sty'","`grfext.sty'", "`caption.sty'", "'subcaption.sty'")
@@ -24,270 +27,495 @@
 # }
 # ggplot
 #install.packages("ggplot2",  repos="http://cran.us.r-project.org")
-@
 
-
-
-% THIS CELL IMPORTS DATA AND VARIOUS FORMATTING ELEMENTS.
-<<import_data, eval=TRUE, dev="png", echo=FALSE>>=
-# Libraries.
 library(ggplot2)
-library(stringi)
 library(stringr)
-library(ggmap) #Retrieve raster map tiles from popular mapping services
-library(osmdata) #OpenStreetMap data 
-library(pacman) #Base library > intuitively named functions
-
-library(leaflet)
-library(rgdal)
-library(tidyr)
-
-# Primary data here.
-data.all <- read.csv("./data/Motor_Vehicle_Collisions_-_Crashes.csv")
-
-# Weather data here.
-data.weather <- read.csv("./data/weatherdataJFK.csv")
-
-# Length of primary data
-n <- 1968341
-
-data.nytimes <- read.csv("./NYT_articles/nyt_articles_2018.csv")
-  for (j in 2019:2021){
-    csv.new <- paste0("./NYT_articles/nyt_articles_", j, ".csv")
-    data.nytimes <- rbind(data.nytimes, read.csv(csv.new))
-  }
-
-# Text theme, used in ggplot for formatting.
-text.theme = theme(
-  axis.title.x = element_text(size = 16),
-  axis.text.x = element_text(size = 14),
-  axis.title.y = element_text(size = 16),
-  plot.title= element_text(size=20))
-
-convert.date <- function(date){
-    # Automatically detects date format and makes conversion
-    holder <- strsplit(date, "/")[[1]]
-    typecheck = (length(holder)>1)
-    if (typecheck){
-      return(paste0(holder[3], "-", holder[1], "-", holder[2]))
-    } else {
-      holder <- strsplit(date, "-")[[1]]
-      return(paste0(holder[2], "/", holder[3], "/", holder[1]))
-    }
-}
-
+library(RSQLite)
+library(scales)
+library(stringi)
+library(ggmap)
+library(osmdata)
+library(pacman)
+library(fmsb)
 @
 
+%-----------------------------------------------------------------------
 \section{Introduction}
 COVID-19 quarantine limited people to remote work and in-home activities. It's likely that the COVID-19 restriction of transportation decreased the number of car crashes in NYC. To test out our hypothesis, we first compare and contrast the car crash distribution through geographical mapping, and later through time-series analysis and free-text analysis based on New York Times articles. 
 
-\section{Geographical Distribution Of Car Crashes Before And After COVID }
+For this report, we transferred our data to SQL database to significantly reduce the size of the data.frames and increase the efficiency of data analysis. 
 
+%-----------------------------------------------------------------------
+\section{Geographical Distribution}
 \begin{figure}[H]
 \centering
-% THIS CELL GENERATES THE GIS Plot
+% Jian Code - GIS Plot
 <<echo=FALSE, width=8, height=8, fig=TRUE>>=
 {
-  #1. Convert Date Data
-  data.all$CRASH.DATE <- as.Date(data.all$CRASH.DATE,"%m/%d/%Y") 
+  dcon <- dbConnect(SQLite(), dbname = "projectDB.db")
+  #1. Get date & coordinate (x,y) data
+  # Before COVID
+  query1 <- "SELECT SUBSTRING(CRASHDATE, -4, 4) AS Year, LATITUDE, LONGITUDE FROM tableCrashes WHERE LATITUDE != 'NA' AND Year = '2019'"
+  res1 <- dbGetQuery(conn=dcon, query1)
   
-  #2. Clean data - get rid of NA
-  data.all %>% 
-    drop_na('LATITUDE') %>% 
-    drop_na('LONGITUDE')  -> data.all_noNA
-  
-  #3. GIS data from OpenStreetMap
+  #2. GIS data from OpenStreetMap
   pacman::p_load(ggmap, osmdata)
-  nyc_map <- lisbon_map <- get_map( getbb('new york city'), source="stamen") #Google Map requires key to API, but stamen doesn't. 
+  nyc_map <- lisbon_map <- get_map(getbb('new york city'), source="stamen") #Google Map requires key to API, but stamen doesn't. 
   g <- ggmap(nyc_map)
   
-  # Map the crash occurance on the map
-  # Before COVID
-  df_before <- data.all_noNA[data.all_noNA$CRASH.DATE < "2020-01-01" & data.all_noNA$CRASH.DATE > "2019-01-01",]
-  
-  g + geom_point(data=df_before, aes(x=LONGITUDE, y=LATITUDE),size=0.0001, alpha=0.1, color="blue") + labs(title = "Crash Occurances Before COVID (2019 - 2020)", y = "LONGITUDE", x = "LATITUDE")
-  
-  # After COVID
-  df_after<- data.all_noNA[data.all_noNA$CRASH.DATE < "2021-01-01" & data.all_noNA$CRASH.DATE > "2020-01-01",]
-  
-  g + geom_point(data=df_after, aes(x=LONGITUDE, y=LATITUDE),size=0.0001, alpha=0.1, color="blue") + labs(title = "Crash Occurances After COVID (2020 - 2021)", y = "LONGITUDE", x = "LATITUDE")
+  #3. Map the crash occurrence on the map
+  g + geom_point(data=res1, aes(x=as.numeric(LONGITUDE) , y=as.numeric(LATITUDE)),size=0.0001, alpha=0.1, color="blue") + labs(title = "Crash Occurances Before COVID (2019 - 2020)", y = "LONGITUDE", x = "LATITUDE")
   
 }
 @
-\caption{Accidents Distribution Before vs After COVID.}
+\caption{Accidents Distribution Before COVID.}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+<<echo=FALSE, width=8, height=8, fig=TRUE>>=
+{  # After COVID
+  query2 <- "SELECT SUBSTRING(CRASHDATE, -4, 4) AS Year, LATITUDE, LONGITUDE FROM tableCrashes WHERE LATITUDE != 'NA' AND Year = '2020'"
+  res2 <- dbGetQuery(conn=dcon, query2)
+
+  g + geom_point(data=res2, aes(x=as.numeric(LONGITUDE) , y=as.numeric(LATITUDE)),size=0.0001, alpha=0.1, color="blue") + labs(title = "Crash Occurances After COVID (2020 - 2021)", y = "LONGITUDE", x = "LATITUDE")
+}
+@
+\caption{Accidents Distribution After COVID.}
 \end{figure}
 
 Each incident is mapped as a blue dot (x = lattitude,y = longitude) based on the OpenStreetMap API for New York City. The bluer the area shows, the more accidents happened. \\
-
-\noindent As shown in Figure 1, there is a sudden decrease in the number of accidents coinciding with the start of the COVID-19 pandemic, especially around the two most populous areas - Manhattan and Brooklyn. Since COVID transmitted quickly among large group of population, Manhattan and Brooklyn were the top two areas with people tested positive at the start of 2020. As a result, the quarantine policy for Manhattan and Brooklyn was more strict than other places, and people adapted to online activities to avoid infection.
-
-
-\section{Time Series Ribbon Plot}
+\noindent
+As shown in Figure 1, there is a sudden decrease in the number of accidents coinciding with the start of the COVID-19 pandemic, especially around the two most populous areas - Manhattan and Brooklyn. Since COVID transmitted quickly among large group of population, Manhattan and Brooklyn were the top two areas with people tested positive at the start of 2020. As a result, the quarantine policy for Manhattan and Brooklyn was more strict than other places, and people adapted to online activities to avoid infection.
+%-----------------------------------------------------------------------
+\section{Contributing Factors}
 \begin{figure}[H]
 \centering
-% THIS CELL GENERATES THE RIBBON PLOT.
+% Carrie Code - Time Series.
+<<import_data, eval=TRUE, dev="png", echo=FALSE>>=
+# Libraries.
+{
+dcon <- dbConnect(SQLite(), dbname = "projectDB.db")
+dbListTables(dcon)
+dbListFields(dcon, "tableCrashes")
+res <- dbSendQuery(conn = dcon, "
+CREATE VIEW tableCrashesSubset AS SELECT CAST(substr(CRASHDATE,7,10) AS INT) 
+AS year, MODCONTRIBUTINGFACTORVEHICLE1, COUNT(*) AS COUNT
+FROM (
+    SELECT CRASHDATE, 
+        CASE 
+          WHEN CONTRIBUTINGFACTORVEHICLE1 IN ('Cell Phone (hands-free)',
+            'Cell Phone (hand-Held)',
+            'Other Electronic Device','Texting','Cell Phone (hand-held)') 
+            THEN 'Cell phone/electronic'
+          WHEN CONTRIBUTINGFACTORVEHICLE1 IN ('Illnes','Illness',
+            'Physical Disability','Prescription medication')
+            THEN 'Medical'
+          WHEN CONTRIBUTINGFACTORVEHICLE1 = 'Drugs (illegal)' 
+            THEN 'Drugs (Illegal)'
+          WHEN CONTRIBUTINGFACTORVEHICLE1 = 'Reaction to Other Uninvolved Vehicle' 
+            THEN 'Reaction to Uninvolved Vehicle'
+          WHEN CONTRIBUTINGFACTORVEHICLE1 IN ('Fatigued/Drowsy',
+            'Fell Asleep','Lost Consciousness') 
+            THEN 'Fatigued/drowsy/asleep/unconscious'
+          WHEN CONTRIBUTINGFACTORVEHICLE1 IN ('80','1','Unspecified',
+            'Other Vehicular') 
+            THEN 'Unknown'
+          WHEN CONTRIBUTINGFACTORVEHICLE1 IS NULL 
+            -- (to be consistent w last time)
+            THEN 'Unknown'
+          ELSE CONTRIBUTINGFACTORVEHICLE1
+          END AS MODCONTRIBUTINGFACTORVEHICLE1
+    FROM tableCrashes
+    WHERE NUMBEROFPERSONSINJURED NOT NULL)
+WHERE MODCONTRIBUTINGFACTORVEHICLE1 IN (
+  SELECT MODCONTRIBUTINGFACTORVEHICLE1 FROM (
+    SELECT MODCONTRIBUTINGFACTORVEHICLE1, SUM(NUMBEROFPERSONSINJURED) 
+    AS COUNT_INJURED FROM
+      (SELECT COLLISION_ID, 
+        CAST(substr(CRASHDATE,7,10) AS INT) AS year, NUMBEROFPERSONSINJURED,
+        CASE 
+          WHEN CONTRIBUTINGFACTORVEHICLE1 IN ('Cell Phone (hands-free)',
+            'Cell Phone (hand-Held)',
+            'Other Electronic Device','Texting','Cell Phone (hand-held)') 
+            THEN 'Cell phone/electronic'
+          WHEN CONTRIBUTINGFACTORVEHICLE1 IN ('Illnes','Illness',
+            'Physical Disability','Prescription medication')
+            THEN 'Medical'
+          WHEN CONTRIBUTINGFACTORVEHICLE1 = 'Drugs (illegal)' 
+            THEN 'Drugs (Illegal)'
+          WHEN CONTRIBUTINGFACTORVEHICLE1 = 'Reaction to Other Uninvolved Vehicle' 
+            THEN 'Reaction to Uninvolved Vehicle'
+          WHEN CONTRIBUTINGFACTORVEHICLE1 IN ('Fatigued/Drowsy',
+            'Fell Asleep','Lost Consciousness') 
+            THEN 'Fatigued/drowsy/asleep/unconscious'
+          WHEN CONTRIBUTINGFACTORVEHICLE1 IN ('80','1','Unspecified','Other Vehicular') 
+            THEN 'Unknown'
+          WHEN CONTRIBUTINGFACTORVEHICLE1 IS NULL
+            THEN 'Unknown'
+          ELSE CONTRIBUTINGFACTORVEHICLE1
+          END AS MODCONTRIBUTINGFACTORVEHICLE1
+      FROM tableCrashes
+      )
+    WHERE MODCONTRIBUTINGFACTORVEHICLE1 NOT IN
+      (SELECT DISTINCT CONTRIBUTINGFACTORVEHICLE1 
+      FROM tableCrashes
+      WHERE NUMBEROFPERSONSINJURED IS NULL
+      AND CONTRIBUTINGFACTORVEHICLE1 NOT NULL)
+    AND MODCONTRIBUTINGFACTORVEHICLE1 != 'Unknown'
+    GROUP BY MODCONTRIBUTINGFACTORVEHICLE1
+    ORDER BY COUNT_INJURED DESC
+    LIMIT 10)
+  )
+GROUP BY year, MODCONTRIBUTINGFACTORVEHICLE1;
+")
+
+res <- dbSendQuery(conn = dcon, "
+SELECT year, MODCONTRIBUTINGFACTORVEHICLE1 AS contributing_factor, 
+CAST(COUNT AS DOUBLE)/CAST(TOTAL AS DOUBLE)*100 AS percent
+FROM tableCrashesSubset JOIN (
+  SELECT year AS year_total, SUM(COUNT) as TOTAL
+  FROM tableCrashesSubset
+  GROUP BY year_total)
+ON year = year_total
+")
+tableCrashesPercentContributingByYear <- dbFetch(res, -1)
+dbClearResult(res)
+
+ggplot(tableCrashesPercentContributingByYear) +
+  aes(x=year, y=percent,color=contributing_factor) +
+  geom_line() +
+  labs(title = "Relative frequency by year for most-injury-causing contributing factors",
+  x = "", y = "Year") +
+  scale_fill_discrete("Contributing factor")
+# dev.off()
+
+dbSendQuery(conn = dcon, "
+DROP VIEW tableCrashesSubset
+")
+}
+@
+\caption{Contributing Factors Line Plot.}
+\end{figure}
+
+We had previously created pie plots of the yearly relative frequency of the ten most common contributing factors to car crashes. However, these plots were difficult to interpret because some of the changes between fractions by year were fairly subtle and the color gradients aren’t the most pronounced. We decided to visualize something similar using a different type of plot for this draft. \\
+\noindent
+Interpretation: This line plot shows the relative frequency of crashes caused by each of the ten contributing factors that cause the most injuries by year. Ranking by the contributing factors that cause the most injuries was a way of ensuring that we considered the most relevant causes, and using a line plot allows us to look at the changes in proportion of each factor over time in addition to the importance of each factor relative to the others.
+
+%-----------------------------------------------------------------------
+\begin{figure}[H]
+\centering
+% Zach Code - Bar Plot.
+<<echo=FALSE, width=11, fig=TRUE>>=
+{
+  dcon <- dbConnect(SQLite(), dbname = "projectDB.db")
+  res <- dbSendQuery(
+    conn = dcon,
+    "
+SELECT CONTRIBUTINGFACTORVEHICLE1, VEHICLETYPECODE1, CAST(SUBSTR(CRASHDATE,-4) AS INT)
+FROM tableCrashes
+WHERE CONTRIBUTINGFACTORVEHICLE1 IN ('Following Too Closely', 'Driver Inattention/Distraction', 'Failure to Yield Right-of-Way', 'Backing Unsafely', 'Other Vehicular')
+AND VEHICLETYPECODE1 IN ('Pick-up Truck', 'PASSENGER VEHICLE', 'BUS', 'Box Truck', 'Bike', 'Sedan')
+AND CAST(SUBSTR(CRASHDATE,-4) AS INT) >= 2020"
+  )
+  mydf <- dbFetch(res,-1)
+  dbClearResult(res)
+  require(scales)
+  ggplot(mydf) + aes(CONTRIBUTINGFACTORVEHICLE1, fill = VEHICLETYPECODE1) +
+    geom_bar(aes(y = (..count..) / sum(..count..)), width = 0.5) +
+    scale_y_continuous(labels = percent) +
+    ylab("Percent") + xlab("Contributing Crash Factor") +
+    scale_fill_manual(values = c("black", "purple", "yellow", "green",
+                                        "blue", "darkgreen")) +
+                                          ggtitle("Top 5 Contributing Crash Factor with Top Vehicle Types after 2020")
+  res <- dbSendQuery(conn = dcon,
+    "SELECT CONTRIBUTINGFACTORVEHICLE1, VEHICLETYPECODE1, CAST(SUBSTR(CRASHDATE,-4) AS INT)
+    FROM tableCrashes
+    WHERE CONTRIBUTINGFACTORVEHICLE1 IN ('Following Too Closely', 'Driver Inattention/Distraction', 'Failure to Yield Right-of-Way', 'Backing Unsafely', 'Other Vehicular')
+    AND VEHICLETYPECODE1 IN ('Pick-up Truck', 'PASSENGER VEHICLE', 'BUS', 'Box Truck', 'Bike', 'Sedan')
+    AND CAST(SUBSTR(CRASHDATE,-4) AS INT) < 2020")
+  
+  mydf <- dbFetch(res,-1)
+  dbClearResult(res)
+  require(scales)
+  ggplot(mydf) + aes(CONTRIBUTINGFACTORVEHICLE1, fill = VEHICLETYPECODE1) +
+    geom_bar(aes(y = (..count..) / sum(..count..)), width = 0.5) +
+    scale_y_continuous(labels = percent) +
+    ylab("Percent") + xlab("Contributing Crash Factor") +
+    scale_fill_manual(values = c("black", "purple", "yellow", "green",
+                                        "blue", "darkgreen")) +
+                                          ggtitle("Top 5 Contributing Crash Factor with Top Vehicle Types before 2020")
+}
+@
+\caption{Barplot of contributing factors, accounting for vehicle type}
+\end{figure}
+It was taken into consideration what were the top contributing factors for New York crashes (excluding the unspecified causes). Many crash factors were accounted for so the top 5 contributing factors (excluding unspecified) were examined. Within the data of top 5 contributing crash factors, the proportion of vehicle type involved was implemented by color. Below is the bar graph of the percentage of crashes occurring with the top 5 crash factors and the type of vehicle taken into account.\\
+\noindent
+The bar graph shows that driver inattention/ distraction accounts significantly for the proportion of crashes in New York city. In addition, within each of the top 5 crash factors, sedan accounts for the most number of crashes, supporting the fact that sedan is involved in the most amount of crashes. We can further explore these high-risk contributing factors by visualizing raw relative counts. An array of pie charts show the relative frequency of each of the top ten contributing factors to car crashes by borough and number of fatalities. Feature engineering was performed to combine related contributing factors into new categories such as ”Fatigued/drowsy/sleepy/unconscious,” and entries with unknown borough were dropped.
+
+%-----------------------------------------------------------------------
+\section{Time Series Analysis}
+\begin{figure}[H]
+\centering
+% Patrick Code - NYT analysis.
 <<echo=FALSE, width=8, height=8, fig=TRUE>>=
 {
-  # Build crash data/day df
-  # ---------- THIS CODE MAY COME IN HANDY LATER!
-  dates.raw <- data.all$CRASH.DATE
-  dates <- data.weather$DATE
-  crashcounts.date <- c()
-  for (date in dates){
-    crashcounts.date <- append(crashcounts.date, length(dates.raw[dates.raw==convert.date(date)]))
+dcon <- dbConnect(SQLite(), dbname = "projectDB.db")
+### TASK ONE: REGRESS CRASHES AGAINST COVID MENTIONS IN NYTIMES HEADLINES.
+{
+  # This cell makes a view of numCrashes/month.
+  {
+    dbSendQuery(conn=dcon, "DROP VIEW IF EXISTS crashesPerMonth")
+    dbSendQuery(conn=dcon, "
+      CREATE VIEW crashesPerMonth AS
+      SELECT
+        SUBSTRING(CRASHDATE, 7, 4) AS Year,
+        SUBSTRING(CRASHDATE, 1, 2) AS Month,
+        count(*) AS numCrashes
+      FROM tableCrashes
+      GROUP BY Year, Month
+    ")
   }
   
-  datecount.df <- data.frame(date=dates, num.crashes=crashcounts.date)
-  # ----------
-  # Calc monthly statistics
-  oldmonth <- "01"
-  month.stats <- c()
-  monthcounts <- c()
-  for (j in 1:3652){
-    newmonth <- substr(dates[j], 6, 7)
+  # This cell does string search on nytimes.
+  # Makes view containing numMentions/month.
+  # Only searches in TITLE and ABSTRACT.
+  {
+    dbSendQuery(conn=dcon, "DROP VIEW IF EXISTS mentionsCount")
+    dbSendQuery(conn=dcon, "
+      CREATE VIEW mentionsCount AS
+      SELECT pub_date
+      FROM tableNYT
+      WHERE
+        abstract LIKE '%COVID%' OR abstract LIKE '%virus%' OR abstract LIKE '%pandemic%'
+      OR
+        headline LIKE '%COVID%' OR headline LIKE '%virus%' OR headline LIKE '%pandemic%'
+    ")
     
-    # If month changes, add stats to result vector and reset monthcounts.
-    if (newmonth!=oldmonth) {
-      oldmonth <- newmonth
-      month.stats <- append(month.stats, mean(monthcounts))
-      month.stats <- append(month.stats, min(monthcounts))
-      month.stats <- append(month.stats, max(monthcounts))
-      monthcounts <- c()
-      
-    # Otherwise, add day's count to monthcounts
-    } else {
-      monthcounts <- append(monthcounts, crashcounts.date[j])
-    }
+    dbSendQuery(conn=dcon, "DROP VIEW IF EXISTS mentionsPerMonth")
+    dbSendQuery(conn=dcon, "
+      CREATE VIEW mentionsPerMonth AS
+      SELECT
+        SUBSTRING(pub_date, 1, 4) AS Year,
+        SUBSTRING(pub_date, 6, 2) AS Month,
+        count(*) AS numMentions
+      FROM mentionsCount
+      GROUP BY Year, Month
+    ")
   }
-  result <- matrix(month.stats, ncol=3, byrow=TRUE)
   
-  # Make ribbon plot
-  ribbon.df <- data.frame(idx=1:119, avg=result[, 1], mins=result[, 2], maxis=result[, 3])
-  ggplot(ribbon.df) + geom_line(aes(x=idx, y=avg), col="blue") + geom_ribbon(aes(ymin=mins, ymax=maxis, x=idx), alpha=0.25) + xlab("Time") + ylab("Num crashes (mean, min, max)") + scale_x_continuous(breaks=c(0, 24, 48, 72, 96, 120), labels=c("2013", "2015", "2017", "2019", "2021", "2023")) + ggtitle("Mean, min and max crashes/month") + text.theme
+  # This cell joins all of the above info to create a df to be used for regression.
+  {
+    dbSendQuery(conn=dcon, "DROP VIEW IF EXISTS articlesPerMonth") 
+    dbSendQuery(conn=dcon, "
+    CREATE VIEW articlesPerMonth AS
+    SELECT
+      SUBSTRING(pub_date, 1, 4) AS Year,
+      SUBSTRING(pub_date, 6, 2) AS Month,
+      count(*) AS numArticles
+    FROM tableNYT
+    GROUP BY Year, Month
+    ")
+    
+    dbSendQuery(conn=dcon, "DROP VIEW IF EXISTS propMentions")
+    dbSendQuery(conn=dcon, "
+    CREATE VIEW propMentions AS
+    SELECT
+      a.Year AS Year,
+      a.Month AS month,
+      c.numCrashes,
+      a.numMentions AS numMentions,
+      b.numArticles AS numArticles,
+      CAST(a.numMentions AS FLOAT)/CAST(b.numArticles AS FLOAT) AS propMentions
+    FROM
+      mentionsPerMonth a,
+      articlesPerMonth b,
+      crashesPerMonth c
+    WHERE
+      a.Year = b.Year AND a.Month = b.Month AND
+      a.Year = c.Year AND a.Month = c.Month
+    ORDER BY Year, Month
+    ")
+    
+    res <- dbSendQuery(conn=dcon, "
+      SELECT * FROM propMentions 
+    ")
+    Crashes.Vs.Mentions <- dbFetch(res, -1)
+    dbClearResult(res)
+  }
+  
+  # This cell does linear regression and ggplots results.
+  {
+    # Make and fit model
+    linear.model <- lm(numCrashes ~ propMentions, data=Crashes.Vs.Mentions)
+    lm.intercept = linear.model$coefficients[1] # p = 2E-16 ***
+    lm.slope = linear.model$coefficients[2] # p = 3.69E-16 ***
+    summary(linear.model)
+    
+    # Plot things
+    ggplot(data=Crashes.Vs.Mentions) +
+      geom_point(aes(x=propMentions, y=numCrashes)) + # Plot points
+      geom_abline(intercept=lm.intercept, slope=lm.slope, col="red") + # Plot lm
+      ggtitle("COVID keywords vs num crashes in each month",
+              subtitle="2018-2021, 1 point = 1 month") +
+      xlab("Proportion of articles with COVID-related keywords/month") +
+      ylab("Number of crashes/month")
+      
+  }
+  
+  # After you are done, run this cell to drop views and clean up your database :)
+  {
+    dbSendQuery(conn=dcon, "DROP VIEW IF EXISTS crashesPerMonth")
+    dbSendQuery(conn=dcon, "DROP VIEW IF EXISTS mentionsCount")
+    dbSendQuery(conn=dcon, "DROP VIEW IF EXISTS mentionsPerMonth")
+    dbSendQuery(conn=dcon, "DROP VIEW IF EXISTS articlesPerMonth") 
+    dbSendQuery(conn=dcon, "DROP VIEW IF EXISTS propMentions")
+  }
+}
+}
+@
+\caption{Regression Plot}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+<<echo=FALSE, width=10, height=10, fig=TRUE>>=
+### TASK TWO: RIBBON PLOT FOR MONTHLY DATA.
+{
+  dcon <- dbConnect(SQLite(), dbname = "projectDB.db")
+  # This cell aggregates tableCrashes into a nice df for the ribbon plot.
+  {
+    dbSendQuery(conn=dcon, "DROP VIEW IF EXISTS crashesPerDay")
+    dbSendQuery(conn=dcon, "
+        CREATE VIEW crashesPerDay AS
+        SELECT
+          SUBSTRING(CRASHDATE, 7, 4) AS Year,
+          SUBSTRING(CRASHDATE, 1, 2) AS Month,
+          SUBSTRING(CRASHDATE, 4, 2) AS Day,
+          COUNT(*) AS numCrashes
+        FROM tableCrashes
+        GROUP BY Year, Month, Day
+      ")
+    
+    dbSendQuery(conn=dcon, "DROP VIEW IF EXISTS crashesMinMaxAvg")
+    dbSendQuery(conn=dcon, "
+        CREATE VIEW crashesMinMaxAvg AS
+        SELECT
+          Year, Month,
+          MIN(numCrashes) AS min,
+          MAX(numCrashes) AS max,
+          AVG(numCrashes) AS avg
+        FROM crashesPerDay
+        GROUP BY Year, Month
+        ORDER BY Year, Month
+      ")
+    
+    res <- dbSendQuery(conn=dcon, "
+        SELECT * FROM crashesMinMaxAvg
+      ")
+    dfRibbon <- dbFetch(res, -1)
+    dbClearResult(res)
+  }
+  
+  # This cell makes the ribbon plot.
+  {
+    # Add indices to df.
+    dfRibbon$index = 1:nrow(dfRibbon)
+    
+    # Make plot.
+    ggplot(data=dfRibbon) +
+      geom_line(aes(x=index, y=avg), col="red") + # Line in red
+      geom_ribbon(aes(x=index, ymin=min, ymax=max), alpha=0.5) + # Ribbon
+      ggtitle("Time vs. Number of Crashes.",
+              subtitle="min, max, and avg crashes/month displayed.") +
+      xlab("Time") + ylab("Crash stats") +
+      scale_x_continuous(breaks=c(7, 31, 55, 79, 103, 127),
+                         labels=c("2013", "2015", "2017", "2019", "2021", "2023"))
+  }
+  
+  # After you are done, run this cell to drop views and clean up your database :)
+  {
+    dbSendQuery(conn=dcon, "DROP VIEW IF EXISTS crashesPerDay")
+    dbSendQuery(conn=dcon, "DROP VIEW IF EXISTS crashesMinMaxAvg")
+  }
 }
 @
 \caption{Ribbon Plot}
 \end{figure}
 
-As base and ggplots were being made in the previous analysis, it came to our attention that the number of crashes changed significantly around the onset of the COVID-19 pandemic.The ribbon plot created above shows a clear drop in the number of crashes for the beginning of 2020, which was roughly when the pandemic started, followed by a partial rebound later in the year. The blue line represents the mean value of car crashes per month, bounded by the maximum and minimum values in the grey area. 
-
-
-\section{Free-text Analysis Based On New York Times Articles}
-
+%-----------------------------------------------------------------------
+\section{Radar Analysis}
 \begin{figure}[H]
 \centering
-% THIS CELL DOES REGEX ON NYTIMES DATA AND PLOTS COV MENTIONS VS CRASHES.
-<<echo=FALSE, width=8, height=8, fig=TRUE>>=
-{ # Lots of stuff in this cell! Prepare data for logit.
-  
-  # Build crash data/day df
-  # ---------- THIS CODE MAY COME IN HANDY LATER!
-  { # This cell makes of num crashes for each day and makes a vector simply containin names of months.
-    dates.raw <- data.all$CRASH.DATE
-    dates <- data.weather$DATE
-    crashcounts.date <- c()
-    for (date in dates){
-      crashcounts.date <- append(crashcounts.date, length(dates.raw[dates.raw==convert.date(date)]))
-    }
-    
-    datecount.df <- data.frame(date=dates, num.crashes=crashcounts.date)
-    
-    # Make list of month names for convenience
-    month.names <- c()
-    for (j in 1:119) {
-      yr <- 2013+floor(j/12)
-      month <- j%%12
-      month <- ifelse(month==0, 12, month)
-      yr <- ifelse(month==12, yr-1, yr)
-      month.names <- append(month.names, paste0(yr, "-", month))
-    }
-  }
-  # ----------
-  { # This cell makes a df of avg, min, max, and perc25 crashes/month.
-    # Calc monthly statistics
-    oldmonth <- "01"
-    month.stats <- c()
-    monthcounts <- c()
-    for (j in 1:3652){
-      newmonth <- substr(dates[j], 6, 7)
-      
-      # If month changes, add stats to result vector and reset     monthcounts.
-      if (newmonth!=oldmonth) {
-        oldmonth <- newmonth
-        month.stats <- append(month.stats, mean(monthcounts))
-        month.stats <- append(month.stats, min(monthcounts))
-        month.stats <- append(month.stats, max(monthcounts))
-        monthcounts <- c()
-        
-        # Otherwise, add day's count to monthcounts
-      } else {
-        monthcounts <- append(monthcounts, crashcounts.date[j])
-      }
-    }
-    result <- matrix(month.stats, ncol=3, byrow=TRUE)
-    ribbon.df <- data.frame(month=month.names, idx=1:119, avg=result[, 1], mins=result[, 2], maxis=result[, 3])
-    # 25% percentile
-    percentile = 25
-    perc25 <- sort(ribbon.df$avg)[ceiling(119*percentile/100)]
-    lowcrashes <- c()
-    for (j in 1:119) {
-      lowcrashes[j] <- ifelse(result[j, 1]<perc25, 1, 0)
-    }
-    ribbon.df <- cbind(ribbon.df, data.frame(has.low.crash.count=lowcrashes))
-    df.short <- ribbon.df[61:107, ]
-  }
-  
-  ggplot(df.short) + geom_point(aes(x=idx, y=has.low.crash.count))
-  
-  { # This cell runs regex on nytimes and creates a count of mentions of covid in titles or abstracts.
-    cov.reg <- regex("COVID|virus|sars|pandemic|wuhan", ignore_case=TRUE)
-    nyt.len <- 152068
-    # Initialize some stuff for easy handling
-    pubdates <- data.nytimes$pub_date
-    headlines <- data.nytimes$headline
-    abstracts <- data.nytimes$abstract
-    
-    # Do search
-    mention.counts <- 0*1:47
-    month.counts <- 0*1:47
-    for (j in 1:nyt.len){
-      pubyr <- as.numeric(substr(pubdates[j], 1, 4))
-      pubmnth <- as.numeric(substr(pubdates[j], 6, 7))
-      month <- 12*(pubyr-2013) + pubmnth
-      news.data <- paste0(headlines[j], abstracts[j])
-      mention.counts[month-61] <- mention.counts[month-61] + ifelse(str_detect(news.data, cov.reg), 1, 0)
-      month.counts[month-61] <- month.counts[month-61] + 1
-    }
-    # Assmple into df
-    # Outliers at 86, 87 of df.short
-    df.short <- cbind(df.short, data.frame(raw.cov.mentions=mention.counts))
-    df.short <- cbind(df.short, data.frame(prop.cov.mentions=mention.counts/month.counts))
-  }
-}
+% Sohpie Code - Radar Plot.
+<<echo=FALSE, width=10, height=10, fig=TRUE>>=
 {
-  linmodel <- lm(avg ~ prop.cov.mentions, data=df.short)
-  ggplot(data=df.short) + geom_point(aes(x=prop.cov.mentions, y=avg)) +
-    geom_abline(slope=-1204.10, intercept=571.91, col="red")
-  # summary(linmodel)
+  dcon <- dbConnect(SQLite(), dbname = "projectDB.db")
+  res <- dbSendQuery(
+    conn = dcon,
+    "
+SELECT CRASHDATE, CAST(SUBSTR(CRASHDATE, -4) AS INT)
+FROM tableCrashes
+WHERE CAST(SUBSTR(CRASHDATE, -4) AS INT) >= 2020;
+"
+  )
+  mydf <- dbFetch(res,-1)
+  dbClearResult(res)
+  mydf
+  
+  year<-mydf$`CAST(SUBSTR(CRASHDATE, -4) AS INT)`
+Year <- c("2013", "2014", "2015", "2016", "2017", "2018",
+          "2019", "2020", "2021", "2022")
+count <- c(203734, 206033, 217694, 229831, 231007,
+            231564, 211486, 112915, 110545, 103688)
+df3 <- data.frame(row.names = "data", 
+                  "2021" = 110545,
+                  "2022" = 103688,
+                  "2013" = 203734,
+                  "2014" = 206033,
+                  "2015" = 217694,
+                  "2016" = 229831,
+                  "2017" = 231007,
+                  "2018" = 231564,
+                  "2019" = 211486,
+                  "2020" = 112915)
+
+# Define the variable ranges: maximum and minimum
+max_min <- data.frame(
+  row.names = c("Max", "Min"),
+  "2021"= c(231600, 103688),
+  "2022"= c(231600, 103688),
+  "2013"= c(231600, 103688),
+  "2014"= c(231600, 103688),
+  "2015"= c(231600, 103688),
+  "2016"= c(231600, 103688),
+  "2017"= c(231600, 103688),
+  "2018"= c(231600, 103688),
+  "2019"= c(231600, 103688),
+  "2020"= c(231600, 103688))
+
+# Bind the variable ranges to the data
+df3 <- rbind(max_min, df3)
+#color
+create_beautiful_radarchart <- function(data, color = "#00AFBB"){
+  radarchart(
+    data, axistype = 1,
+    # Customize the polygon
+    pcol = color, pfcol = scales::alpha(color, 0.5), plwd = 2, plty = 1,
+    # Customize the grid
+    cglcol = "grey", cglty = 1, cglwd = 0.8,
+    # Customize the axis
+    axislabcol = "grey", 
+  )
+}
+create_beautiful_radarchart(df3)
+legend(
+  x = "bottomright", legend = c("Number of car crashes in NYC"),
+  bty = "n", pch = 20 , col = c("#00AFBB"),
+  text.col = "black", cex = 1, pt.cex = 1.5
+  )
 }
 @
-\caption{Free-text Analysis}
-\end{figure}
-
-The trend from the Ribbon Plot led us to ask the question of how the COVID-19 pandemic affected the transportation in New York City. To further see if the transportation within New York City was really affected by the pandemic, a dataset with headlines of every article from The New York Times from 2018 was collected. A plot of average number of crashes per day in a month vs the number of mentions of something virus/pandemic related in the headline is plotted.\\
-
-\noindent Through this linear regression model, we see there's a negative correlation between the average number of crashes per day with the mention of COVID in news. It is reasonable since people were more aware of the COVID outbreaks and chose to stay at home instead of going out, leading to a lower probability of car crashes. 
-
-\section{Contributing Factors Of Accidents Across Time}
-
-\begin{figure}[H]
-\centering
-\caption{Piechart}
-\end{figure}
-
-Since a notable decrease in the number of crashes per day was observed at the onset of the COVID-19 pandemic, we wanted to explore whether any change in the composition of the causes of crashes was observed when the pandemic began. To this end, pie plots showing the relative frequency of each of the top ten contributing factors in the data set by year were created. However, the distribution does not show a significant difference among different years.
-
-
 \end{document}
 
 

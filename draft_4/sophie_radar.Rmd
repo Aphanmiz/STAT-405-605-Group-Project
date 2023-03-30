@@ -1,0 +1,81 @@
+```{r}
+library(fmsb)
+```
+
+```{r}
+file<-read.csv("~/Downloads/Motor_Vehicle_Collisions_-_Crashes.csv")
+borough<-file$BOROUGH
+number_of_person_injured<-as.numeric(file$NUMBER.OF.PERSONS.INJURED)
+number_of_person_killed<-as.numeric(file$NUMBER.OF.PERSONS.KILLED)
+summary(number_of_person_injured)
+date<-file$CRASH.DATE
+date_split<-strsplit(date, "/")
+date_split<-do.call(rbind, date_split)
+year<-as.numeric(date_split[,3])
+table(year)
+df2<-cbind(file, year)
+nrow(df2[df2$year==2012, ])
+nrow(df2[df2$year==2013, ])
+nrow(df2[df2$year==2014, ])
+nrow(df2[df2$year==2015, ])
+nrow(df2[df2$year==2016, ])
+nrow(df2[df2$year==2017, ])
+nrow(df2[df2$year==2018, ])
+nrow(df2[df2$year==2019, ])
+nrow(df2[df2$year==2020, ])
+nrow(df2[df2$year==2021, ])
+nrow(df2[df2$year==2022, ])
+
+Year <- c("2013", "2014", "2015", "2016", "2017", "2018",
+          "2019", "2020", "2021", "2022")
+count <- c(203734, 206033, 217694, 229831, 231007,
+            231564, 211486, 112915, 110545, 103688)
+df3 <- data.frame(row.names = "data", 
+                  "2021" = 110545,
+                  "2022" = 103688,
+                  "2013" = 203734,
+                  "2014" = 206033,
+                  "2015" = 217694,
+                  "2016" = 229831,
+                  "2017" = 231007,
+                  "2018" = 231564,
+                  "2019" = 211486,
+                  "2020" = 112915)
+
+# Define the variable ranges: maximum and minimum
+max_min <- data.frame(
+  row.names = c("Max", "Min"),
+  "2021"= c(231600, 103688),
+  "2022"= c(231600, 103688),
+  "2013"= c(231600, 103688),
+  "2014"= c(231600, 103688),
+  "2015"= c(231600, 103688),
+  "2016"= c(231600, 103688),
+  "2017"= c(231600, 103688),
+  "2018"= c(231600, 103688),
+  "2019"= c(231600, 103688),
+  "2020"= c(231600, 103688))
+
+# Bind the variable ranges to the data
+df3 <- rbind(max_min, df3)
+#color
+create_beautiful_radarchart <- function(data, color = "#00AFBB"){
+  radarchart(
+    data, axistype = 1,
+    # Customize the polygon
+    pcol = color, pfcol = scales::alpha(color, 0.5), plwd = 2, plty = 1,
+    # Customize the grid
+    cglcol = "grey", cglty = 1, cglwd = 0.8,
+    # Customize the axis
+    axislabcol = "grey", 
+  )
+}
+create_beautiful_radarchart(df3)
+legend(
+  x = "bottomright", legend = c("Number of car crashes in NYC"),
+  bty = "n", pch = 20 , col = c("#00AFBB"),
+  text.col = "black", cex = 1, pt.cex = 1.5
+  )
+
+
+```
