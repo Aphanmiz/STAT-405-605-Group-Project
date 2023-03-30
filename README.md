@@ -23,31 +23,48 @@ This course introduces students to the statistical programming language, R, and 
  - **What**: Explore the primary dataset (>1M rows) and secondary dataset (weather).
  - **Why**:  Understand basic characteristics of dataset.
  - **How**: Generate basic plots (pie chart, bar graph, regression, residual plot, normal Q-Q plot, cumulative linear plot etc).
+ - **Who**: 
+	 - Graph Generation: All team members (x6 basic plots)
+	 - Report LatTex Writing + Submission: Patrick
 
 ### 2.0
 - **What**: Analyze trends and patterns in data. 
 - **Why**: To identify significant change in pattern. 
 - **How**: Generate more sophisticated ggplots (GIS map, density plot, ribbon plot, bar graph, pie chart, dot plot etc.)
+-  - **Who**: 
+	 - Graph Generation: All team members (x6 ggplots)
+	 - Report LatTex Writing + Submission: Patrick
 
 ### 3.0
 - **What**: Identify the effect of COVID on car crash occurrences.
 - **Why**: To understand the behavior change in city level transportation. 
 - **How**: Compare and contrast GIS distribution before and after COVID, add secondary dataset (NYT articles) for linear regression analysis, and identify contributing factors across time. 
+- **Who**: 
+	 - Graph Generation: All team members (x4 COVID plots)
+	 - Report LatTex Writing + Submission: Jian
 
 ### 4.0 (Current Draft)
 - **What**: Integrate data into SQL database for storing & accessing large volumes of data. 
 - **Why**: To enable scalability and easier data manipulation. 
 - **How**: Using dplyr with SQL queries to significantly reduce the  size of the data.frames to generate plots in 3.0.
+- **Who**: 
+	 - Graph Generation: All team members (x5 SQL plots)
+	 - Report LatTex Writing + Submission: Jian
 
 ### 5.0
 - **What**: Produce & optimize the killer plot. **Possibly Machine Learning Tools**
 - **Why**:  To set the main theme of final presentation.
 - **How**: Using creative ways to combine & synthesize key insights mined from primary & secondary dataset. 
+- **Who**: 
+	 - Graph Generation: All team members
+	 - Report LatTex Writing + Submission: TBD
 
 ### Rehearsal
 - **What**: Each team member gets ready for their presentation & prepare for possible Q&A, 
 - **Why**:  Practice makes perfect.
 - **How**: Write down presentation scripts & practice in time as a group. 
+-  **Who**: 
+	 - All team members
  
 ### Final Presentation
 - **What**: 10min presentation + 2min Q&A
@@ -58,3 +75,9 @@ This course introduces students to the statistical programming language, R, and 
 	- killer plot (20%)
 	- format of presentation (introduction, methods, analysis, conclusion, etc.) (25%)
 	- overall delivery of the slides/presentation (how well you are able to express your research) (20%)
+-  **Who**: 
+	 - Patrick
+	 - Jian
+	 - Zach
+	 - Carrie
+	 - Sophia
