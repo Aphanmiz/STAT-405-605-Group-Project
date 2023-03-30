@@ -1,0 +1,136 @@
+\documentclass[10pt]{article}
+
+% Formatting packages below.
+\usepackage[left=1in,right=1in,top=1in,bottom=1in]{geometry}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{graphicx}
+
+\begin{document}
+\SweaveOpts{concordance=TRUE}
+\title{Running head:}
+\author{Jian Ruan, Zach Yu, Carrie Hashimoto, Sophia Lyu (Undergraduate), Patrick Yee (Graduate)}
+\maketitle
+<<install_packs, eval=TRUE, dev="png", echo=FALSE>>=
+## UNCOMMENT THIS CELL IF RUNNING ON A NEW MACHINE
+# packs <- c("`ae.sty'","`grfext.sty'", "`caption.sty'", "'subcaption.sty'")
+# 
+# for (i in 1:length(packs)) {
+#     tinytex::parse_install(text = paste('! LaTeX Error: File', packs[i],'not found.'))
+# }
+@
+
+
+<<import_data, eval=TRUE, dev="png", echo=FALSE>>=
+#Import data
+data.all <- read.csv("C:/Users/16464/Desktop/605 stat!/project files/Motor_Vehicle_Collisions_-_Crashes.csv")
+data.weather <- read.csv("C:/Users/16464/Desktop/605 stat!/project files/weatherdataJFK.csv")
+@
+
+\section{Motivation and Overview of Primary Data.}
+The aim of this project is to analyze contributing factors for motor vehicle accidents and related injuries in the New York Metropolitan area. A better statistical understanding of these factors could help guide more intelligent decisions in the interest of public safety by preemptively identifying conditions under which accidents are more likely. These analyses would be of interest to officials in both the public (legislative, infrastructual) and private (insurance, engineering) sectors. \\ \\
+The primary dataset for this project is a list of motor vehicle accidents in New York City between 1 Januray 2013 and 31 December 2022 (MVCC). The data are collected by the New York Police Department and maintained by the City of New York [1] (1.97m rows $\times$ 29 cols) and contains date/time, vehicle type, location, and injury data for each raw observation. Since the MVCC set is complete population data (eg, contains every known car accident over the specified 10-year interval and is not a sample), the main focus of this study will be on regression and causality, not statistical inference.
+
+\section{Number and severity of accidents as a function of location.}
+
+\begin{figure}[H]
+    \centering
+    \begin{minipage}{0.45\textwidth}
+        \centering
+<<echo=FALSE, width=8, height=8, fig=TRUE>>=
+{ # Pie chart of raw counts
+  boroughs <- data.all$BOROUGH
+  counts <- table(boroughs)[-1]
+  cols <- c("red", "yellow", "green", "blue", "purple")
+  abbrs <- c("BX", "BK", "MHTN", "QS", "SI")
+  
+  pie(counts, col=cols, labels=abbrs, title="Number of crashes/borough, raw", cex=3)
+}
+@
+        \caption{Number of accidents/borough, raw}
+    \end{minipage}
+    \begin{minipage}{0.45\textwidth}
+        \centering
+<<echo=FALSE, width=4, height=4, fig=TRUE>>=
+{ # Barplot of accidents/borough per capita
+  pops <- c(1472654, 2736074, 1694251, 2405464, 495747)
+  barplot(counts/pops, las=2, col=cols, names=abbrs, cex.names=1.2)
+}
+@
+        \caption{Number of accidents/borough, per capita}
+    \end{minipage}
+\end{figure}
+
+As expected, the raw number of accidents agrees with time-averaged population per borough. [2] When controlling for population, however, the number of accidents per capita do not follow a uniform distribution, with Manhattan being the most dangerous and Staten Island being the least dangerous. These observations can be verified quantitatively:
+\newpage
+<<echo=FALSE, width=3, height=3, fig=FALSE>>=
+{ # Chisq test
+  null.probs <- (pops/sum(pops))
+  observed.counts <- as.numeric(counts)
+  chisq.results <- chisq.test(x=observed.counts, p=null.probs)
+  chisq.results
+}
+@
+\section{Incorporating weather data.}
+It was hypothesized that weather influences the likelihood of accidents, as certain humidity levels can affect visibility and precipitation/high wind speeds can create unsafe road conditions. To investigate the correlation between accident risk and weather, the MVCC was cross referenced against weather data collected by JFK international airport from 2013 to 2022 (NCDC). [3] These data (3652 rows $\times$ 21 cols) contain precipitation, wind, temperature and other weather data for each day in the interval of interest. For each day, accident counts were aggregated from the primary data and regressed against rainfall for the corresponding entry in NCDC.
+
+\begin{figure}[H]
+\centering
+<<echo=FALSE, width=2.5, height=2, fig=TRUE>>=
+{ # Plot precip vs num crashes and do regression
+  convert.date <- function(date){
+    # Automatically detects date format and makes conversion
+    holder <- strsplit(date, "/")[[1]]
+    typecheck = (length(holder)>1)
+    if (typecheck){
+      return(paste0(holder[3], "-", holder[1], "-", holder[2]))
+    } else {
+      holder <- strsplit(date, "-")[[1]]
+      return(paste0(holder[2], "/", holder[3], "/", holder[1]))
+    }
+  }
+  dates <- data.all$CRASH.DATE[order(data.all$CRASH.DATE)]
+  datecounts <- table(dates)
+  weather.sort <- data.weather[order(data.weather$DATE), c(2, 4)]
+  
+  # Build x,y coords and assemble df
+  xvals <- c()
+  yvals <- c()
+  for (j in 1:length(weather.sort$DATE)){
+    xvals[j] <- weather.sort[j, 2]
+    yvals[j] <- datecounts[[convert.date(weather.sort[j, 1])]]
+  }
+  prec.crashes.df <- data.frame(precipitation=xvals, num.crashes=yvals)
+  
+  # Make linear model
+  linmodel <- lm(num.crashes ~ precipitation, data=prec.crashes.df)
+  
+  # DON'T CHANGE THESE NUMBERS! SERIOUSLY! DON'T EVEN THINK ABOUT IT!
+  par(mar = c(2, 2, 0.5, 1.5))
+  
+  # Plot model
+  plot(xvals, yvals, xlab="Preciptation (inches/day", ylab="Num accidents", col="blue", pch=".")
+  abline(linmodel$coefficients[[1]], linmodel$coefficients[[2]], col="red")
+}
+@
+\caption{Precipitation (inches) versus number of crashes/day}
+\end{figure}
+
+The coefficient of this model is 31.4, which is significant ($p=.0002$).
+
+\begin{thebibliography}{9}
+
+\bibitem{primarydata}
+(NYPD), Police Department. "Motor Vehicle Collisions - Crashes: NYC Open Data." Motor Vehicle Collisions - Crashes | NYC Open Data, 17 Feb. 2023, https://data.cityofnewyork.us/Public-Safety/Motor-Vehicle-Collisions-Crashes/h9gi-nx95. 
+  
+\bibitem{boroughpop}
+"America." New York City Boroughs (USA): Boroughs - Population Statistics, Charts and Map, http://www.citypopulation.de/en/usa/newyorkcity/.
+
+\bibitem{weatherdata}
+National Centers for Environmental Information (NCEI). "Climate Data Online Search." Search | Climate Data Online (CDO) | National Climatic Data Center (NCDC), https://www.ncdc.noaa.gov/cdo-web/search. 
+
+\end{thebibliography}
+
+\end{document}
