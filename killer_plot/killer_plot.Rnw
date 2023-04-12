@@ -1,0 +1,308 @@
+\documentclass[10pt]{article}
+
+% Formatting packages below.
+\usepackage[left=1in,right=1in,top=1in,bottom=1in]{geometry}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{graphicx}
+
+\begin{document}
+\SweaveOpts{concordance=TRUE}
+\title{Group 4 - Killer Plot: Decision Tree Heat Map}
+\author{Jian Ruan, Zach Yu, Carrie Hashimoto, Sophia Lyu (Undergraduate), Patrick Yee (Graduate)}
+\maketitle
+
+% THIS CELL IMPORTS DATA AND VARIOUS FORMATTING ELEMENTS.
+<<import_data, eval=TRUE, dev="png", echo=FALSE>>=
+# Libraries.
+library(grid)
+library(stringr)
+library(stringi)
+@
+
+\section{Introduction}
+
+\noindent Through previous drafts, we have identified several contributing factors for NYC car crashes with COVID-19 as a turning point. However, data analysis is limited in a way that it only captures patterns in the past. As a result, we decide to \textbf{do machine learning on the primary and secondary datasets to predict future accidents given the past pattern}. \\ 
+
+\noindent Our first round of training includes variables like weather, time of the day, and mentioning of COVID in NYT articles. These variables are \textbf{not comprehensive} for car crashes related factors, but they give us a \textbf{starting point} to generate predictions so that police officers can take proactive measures to prevent them. Ultimately, ML on NYC car crashes can lead to improved traffic safety and a reduction in injuries and fatalities on the road.
+
+\section{Inspiration: Gradient Boosting}
+
+\noindent We use \textbf{Gradient Boosting} as the algorithm for ML training.  It involves the iterative development of multiple weak models to create a stronger, more accurate model. In gradient boosting, a model is created by taking a base algorithm, such as decision trees, and sequentially fitting new models to the errors made by the previous models. This process involves optimizing a loss function, such as mean squared error, and adjusting the weights of the data points to minimize the error in the predictions. The final model is an aggregation of all the weak models, each one improving the accuracy of the previous models. Gradient boosting is a popular technique for machine learning because it can handle large datasets and is relatively robust to overfitting, a common problem in other machine learning techniques. \\ 
+
+\noindent The inspiration for the final killer plot comes from \textbf{the need to communicate complex ML algorithm in a simple and visually appealing way}. It is important to visualize the decision process of a Gradient Boosting model for several reasons. \\ 
+
+\noindent First, visualizing the decision process can help us understand \textbf{how the model is making predictions} and \textbf{which features are most important} in the model. This can help us identify \textbf{potential biases or errors} in the model, and it can also help us explain the model to others who may not be familiar with machine learning techniques. \\
+
+\noindent Second, visualization can help us identify any \textbf{potential overfitting or underfitting} in the model. Overfitting occurs when the model is too complex and fits the training data too closely, while underfitting occurs when the model is too simple and fails to capture the complexity of the data. By visualizing the decision process, we can see how well the model is fitting the data and whether it is generalizing well to new data.  \\
+
+\noindent Finally, visualizing the decision process can help us \textbf{optimize the model} by identifying areas where it can be improved. By understanding how the model is making predictions, we can identify areas where we can add more features or data, or where we may need to adjust the model parameters to improve its performance. Overall, visualization is an important tool for understanding, improving, and communicating the results of Gradient Boosting models. \\ 
+
+\section{Common Parameters And Metrics For Gradient Boosting}
+
+\noindent In Gradient Boosting, some of the common hyperparameters and evaluation metrics are: \\ 
+
+\noindent \textbf{eta (learning rate)}: This is a hyperparameter that controls the step size at each iteration of the gradient boosting algorithm. A smaller learning rate may result in better performance but at the cost of slower convergence. \\ 
+
+\noindent  \textbf{N (number of boosting iterations)}: This is the number of trees that will be built during the training process. A higher number of trees may lead to better performance but also increases the risk of overfitting. \\ 
+
+\noindent  \textbf{MAD (mean absolute deviation)}: This is an evaluation metric that measures the average absolute difference between the predicted values and the true values. \\ 
+
+\noindent  \textbf{RMSE (root mean squared error)}: This is another evaluation metric that measures the square root of the average squared difference between the predicted values and the true values. \\ 
+
+\noindent  \textbf{labels}: These are the target variables or labels that the model is trying to predict. \\ 
+
+\noindent  \textbf{num.leaves}: This is another hyperparameter that determines the maximum number of leaves or terminal nodes in each tree. Increasing this parameter may result in higher model capacity, but also increases the risk of overfitting. \\ 
+
+\section{Killer Plot - Decision Tree Heat Map}
+
+\noindent The killer plot is consited of two part: heat map and decision trees. \\
+
+\noindent The heat map visualizes the accuracy of ML prediction. The less MAD (mean absolute deviation), the greener a pixel. The greenest area represents the highest accuracy. \\
+
+\noindent The decision tree visualizes the decision making process of the Gradient Boosting algorithm. The tree starts from the bottom node and grows upward with more nodes added. We choose depth = 3 to ensure enough information is presented while keeping the graph clean and easy to read. 
+
+
+\begin{figure}[H]
+
+<<echo=FALSE>>=
+# Step 0: Function for extracting plotting info from string of labels.
+# draw_tree(input_string, plot_tree = TRUE)
+{
+  draw_tree <- function(input_string, # String of labels. (See: "labels" field of xgb_trees_data.csv)
+                        x=100, y=100, # Coordinates of root vertex.
+                        height=500, width=500, # How (physically) big the tree should be.
+                        tree.depth=3, # How deep did we specify trees to be when we trained xgb?
+                        plot_tree=FALSE, # Do you want to visualize the tree using base plots?
+                        font_size=3 # Label font size.
+                        ){
+    # DESCRIPTION:
+      # This function takes in a string of labels separated by commons, for example:
+      # "wind < 28.2999992, numCrashes < 877.5, wind < 28.6350002, snow < 5.30000019, precip < 0.0799999982, Leaf, wind < 29.6349983, Leaf, Leaf, Leaf, Leaf, Leaf, Leaf"
+      # and calculates all the information needed to turn those labels into a binary tree.
+      # using grid. Also visualizes the tree if plot_tree==TRUE.
+    
+    # Outputs:
+      # Coordinates of vertices
+      # Corresponding text labels
+      # Start and endpoint vertices of segments
+    
+    require(stringi)
+    require(stringr)
+    labels.raw <- strsplit(input_string, ", ")[[1]]
+    
+    # First, calculate possible vertex locations based on plotting parameters.
+    {
+      x.vertices <- c()
+      y.vertices <- c()
+      vstep <- height/tree.depth
+      
+      for (depth.ticker in 0:tree.depth) {
+        num.vertices.in.row <- 2^(depth.ticker)
+        hstep <- width/(num.vertices.in.row+1)
+        for (width.ticker in 1:num.vertices.in.row) {
+          x.vertices <- append(x.vertices, x+(width.ticker)*hstep)
+          y.vertices <- append(y.vertices, y+(depth.ticker)*vstep)
+        }
+      }
+      x.vertices <- x.vertices - width/2
+    }
+    
+    # Next, assign labels and prune vertices that don't exist.
+    {
+      num.vertices <- length(x.vertices)
+      labels.fixed <- rep("HOLDER", times=num.vertices)
+      labels.fixed[1] <- labels.raw[1]
+      label.tracker <- 2
+      for (j in 2:num.vertices) {
+        parent <- floor(j/2)
+        if (labels.fixed[parent]=="Leaf" | labels.fixed[parent]=="PASS") {
+          labels.fixed[j] <- "PASS"
+        } else {
+          labels.fixed[j] <- labels.raw[label.tracker]
+          label.tracker <- label.tracker+1
+        }
+      }
+    }
+    
+    # Calculate where edges need to be.
+    {
+      segments.start.x <- c()
+      segments.start.y <- c()
+      segments.end.x <- c()
+      segments.end.y <- c()
+      
+      for (j in 2:num.vertices){
+        parent <- floor(j/2)
+        if (!(labels.fixed[parent]=="Leaf" | labels.fixed[parent]=="PASS")) {
+          segments.start.x <- append(segments.start.x, x.vertices[parent])
+          segments.start.y <- append(segments.start.y, y.vertices[parent])
+          segments.end.x <- append(segments.end.x, x.vertices[j])
+          segments.end.y <- append(segments.end.y, y.vertices[j])
+        }
+      }
+    }
+    
+    # Only keep plotted vertices and format labels.
+    {
+      x.vertices.plot <- x.vertices[labels.fixed!="PASS"]
+      y.vertices.plot <- y.vertices[labels.fixed!="PASS"]
+      labels.plot <- c()
+      for (label in labels.raw) {
+        if (label=="Leaf") {
+          labels.plot <- append(labels.plot, " ")
+        } else {
+          labels.plot <- append(labels.plot, str_replace(label, "<", "\n<"))
+        }
+      }
+    }
+    
+    # If plot_tree=TRUE, then make a plot.
+    {
+        if (plot_tree) {
+        plot(x.vertices.plot, y.vertices.plot)
+        text(x.vertices.plot, y.vertices.plot, labels.plot, cex=font_size)
+        segments(segments.start.x,
+                 segments.start.y,
+                 segments.end.x,
+                 segments.end.y
+                 )
+      }
+    }
+    
+    # Clean up and end :3
+    {
+      rm(hstep)
+      rm(vstep)
+      rm(label.tracker)
+      rm(labels.fixed)
+      rm(num.vertices)
+      rm(parent)
+      rm(width.ticker)
+      rm(x.vertices)
+      rm(y.vertices)
+      rm(x)
+      rm(y)
+      rm(tree.depth)
+      rm(height)
+      rm(width)
+      
+      result <- list(x.vertices.coords=x.vertices.plot,
+                     y.vertices.coords=y.vertices.plot,
+                     segments.start.x=segments.start.x,
+                     segments.start.y=segments.start.y,
+                     segments.end.x=segments.end.x,
+                     segments.end.y=segments.end.y,
+                     labels=labels.plot)
+    }
+    
+    return(result)
+  }
+}
+@
+
+\centering
+<<echo=FALSE, width=8, height=8, fig=TRUE>>=
+
+# Part 1: Heat Map
+# calling the csv data that Patrick made
+tree <- read.csv('xgb_trees_data.csv')
+
+# making a new data set from Patrick's data such that eta is the col and 
+# number of iterations is the row. Each cell gives the accuracy level for the
+# the corresponding eta value and number of iteration
+holder = matrix(rep(0, times=420), nrow=21)
+for (j in 1:420) {
+  # 21 x 20
+  holder[(20*tree$eta)[j]+1, tree$N[j]] = tree$MAD[j]
+}
+# 20 x 21: 
+df <- t(holder)
+
+# renaming the columns to match values of eta
+colnames(df) <- seq(0, 1, 0.05)
+
+# replacing each accuracy value with a corresponding hexadecimal color
+# better accuracy values (lower MAD) will have a "darker" hexadecimal color
+lst <- as.vector(as.matrix(df))
+lst <- sort(lst)
+x.cord<- c()
+y.cord <- c()
+tree.label <- c()
+
+colors <- colorRampPalette(c("darkgreen", "white"))(nrow(df) * ncol(df))
+new <- matrix(rep('', 420), nrow = nrow(df))
+tol <- 1e-3
+
+l = length(lst) / 6
+
+for (k in 1:length(lst)) {
+  for (i in 1:nrow(df)) {
+    for (j in 1:ncol(df)) {
+      if (lst[k] == df[i, j]){
+        new[i, j] <- colors[k]
+        if(k == 1 || k == l*2 || k == l*3 || k == l*4 || k == l*5){
+          x.cord <- append(x.cord, i)
+          y.cord <- append(y.cord, j)
+          tree.label <- append(tree.label, subset(tree, N == i & eta ==(j-1)/20)$labels)
+        }
+       }
+    }
+  }
+}
+
+# Step 2: Generate Tree Info
+
+tree_x <- x.cord/21
+tree_y <- y.cord
+tree_string  <- tree.label
+
+## Round everything to 3 decimals to avoid overlap of labels
+tree_string <- str_replace_all(tree_string, "\\b\\d+\\.\\d+\\b", function(x) as.character(round(as.numeric(x), 3)))
+
+# Generating the heat map using cird library
+grid.newpage()
+vp <- viewport(x = 0.5, y = 0.5,
+              height = 0.8, width = 0.8,
+              xscale = c(0, 1), yscale = c(1, 20))
+pushViewport(vp)
+grid.rect()
+grid.raster(new)
+
+## 0.05 increments for x
+grid.xaxis(at=seq(from=0,to=1,by=0.05))
+## 1 increments for y
+grid.yaxis(at=seq(from=1,to=20,by=1))
+
+grid.text("X = eta (learning rate 0~1), Y = N (# of boosting iterations 1~20)", x = unit(0.5, "npc"), y = unit(-0.1, "npc"), just = c("center", "top"))
+
+## Given vectors of x coords, y coords, and string input for Patrick's function,
+## plot each tree
+for (i in seq(1,length(tree_x))) {
+  res <- draw_tree(tree_string[i],x=tree_x[i],y=tree_y[i],height=2.5,width=0.3,plot_tree=FALSE)
+  grid.segments(x0 = unit(res$segments.start.x, "native"), y0 = unit(res$segments.start.y, "native"),
+               x1 = unit(res$segments.end.x, "native"), y1 = unit(res$segments.end.y, "native"),
+               arrow = NULL,
+               name = NULL, gp = gpar(col="gray"), draw = TRUE)
+  grid.points(x=unit(res$x.vertices.coords,"native"),
+              y=unit(res$y.vertices.coords,"native"),pch=21,
+              size=unit(0.01,"npc"),gp=gpar(col="gray",fill="white"))
+  text <- textGrob(res$labels,x=unit(res$x.vertices.coords,"native"),
+            y=unit(res$y.vertices.coords,"native"),
+            gp=gpar(fontsize=6,col="white"), rot = -10)
+  grid.draw(text)
+}
+
+## De-activate viewport
+popViewport()
+
+@
+
+\caption{Decision Tree Map}
+\end{figure}
+
+\end{document}
+
+

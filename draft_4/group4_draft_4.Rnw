@@ -15,8 +15,6 @@
 \author{Jian Ruan, Zach Yu, Carrie Hashimoto, Sophia Lyu (Undergraduate), Patrick Yee (Graduate)}
 \maketitle
 
-%-----------------------------------------------------------------------
-
 % Install packages & Setup Libraries
 <<install_packs, eval=TRUE, dev="png", echo=FALSE>>=
 # # UNCOMMENT THIS CELL IF RUNNING ON A NEW MACHINE
@@ -225,9 +223,9 @@ AND CAST(SUBSTR(CRASHDATE,-4) AS INT) >= 2020"
     geom_bar(aes(y = (..count..) / sum(..count..)), width = 0.5) +
     scale_y_continuous(labels = percent) +
     ylab("Percent") + xlab("Contributing Crash Factor") +
-    scale_fill_manual(values = c("black", "purple", "yellow", "green",
-                                        "blue", "darkgreen")) +
-                                          ggtitle("Top 5 Contributing Crash Factor with Top Vehicle Types after 2020")
+    scale_fill_manual(values = c("black", "purple", "blue","darkgreen")) +
+                                          ggtitle("Top 5 Contributing Crash Factor with Top Vehicle Types after 2020")  + theme(axis.text.x = element_text(angle = 35, hjust=1))
+
   res <- dbSendQuery(conn = dcon,
     "SELECT CONTRIBUTINGFACTORVEHICLE1, VEHICLETYPECODE1, CAST(SUBSTR(CRASHDATE,-4) AS INT)
     FROM tableCrashes
@@ -244,7 +242,8 @@ AND CAST(SUBSTR(CRASHDATE,-4) AS INT) >= 2020"
     ylab("Percent") + xlab("Contributing Crash Factor") +
     scale_fill_manual(values = c("black", "purple", "yellow", "green",
                                         "blue", "darkgreen")) +
-                                          ggtitle("Top 5 Contributing Crash Factor with Top Vehicle Types before 2020")
+                                          ggtitle("Top 5 Contributing Crash Factor with Top Vehicle Types before 2020")  + theme(axis.text.x = element_text(angle = 35, hjust=1))
+  
 }
 @
 \caption{Barplot of contributing factors, accounting for vehicle type}
@@ -262,7 +261,6 @@ The bar graph shows that driver inattention/ distraction accounts significantly 
 {
 dcon <- dbConnect(SQLite(), dbname = "projectDB.db")
 ### TASK ONE: REGRESS CRASHES AGAINST COVID MENTIONS IN NYTIMES HEADLINES.
-{
   # This cell makes a view of numCrashes/month.
   {
     dbSendQuery(conn=dcon, "DROP VIEW IF EXISTS crashesPerMonth")
@@ -341,11 +339,7 @@ dcon <- dbConnect(SQLite(), dbname = "projectDB.db")
       SELECT * FROM propMentions 
     ")
     Crashes.Vs.Mentions <- dbFetch(res, -1)
-    dbClearResult(res)
-  }
-  
-  # This cell does linear regression and ggplots results.
-  {
+    
     # Make and fit model
     linear.model <- lm(numCrashes ~ propMentions, data=Crashes.Vs.Mentions)
     lm.intercept = linear.model$coefficients[1] # p = 2E-16 ***
@@ -360,7 +354,7 @@ dcon <- dbConnect(SQLite(), dbname = "projectDB.db")
               subtitle="2018-2021, 1 point = 1 month") +
       xlab("Proportion of articles with COVID-related keywords/month") +
       ylab("Number of crashes/month")
-      
+    dbClearResult(res)
   }
   
   # After you are done, run this cell to drop views and clean up your database :)
@@ -371,7 +365,6 @@ dcon <- dbConnect(SQLite(), dbname = "projectDB.db")
     dbSendQuery(conn=dcon, "DROP VIEW IF EXISTS articlesPerMonth") 
     dbSendQuery(conn=dcon, "DROP VIEW IF EXISTS propMentions")
   }
-}
 }
 @
 \caption{Regression Plot}
@@ -516,6 +509,9 @@ legend(
   )
 }
 @
+\caption{Radar Plot}
+\end{figure}
+
 \end{document}
 
 

@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023) (preloaded format=pdflatex 2023.3.30)  30 MAR 2023 17:12
+This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023) (preloaded format=pdflatex 2023.3.30)  30 MAR 2023 17:43
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -221,7 +221,7 @@ Overfull \hbox (26.93481pt too wide) in paragraph at lines 17--17
 <group4_draft_4-002.pdf, id=2, 578.16pt x 578.16pt>
 File: group4_draft_4-002.pdf Graphic file (type pdf)
 <use group4_draft_4-002.pdf>
-Package pdftex.def Info: group4_draft_4-002.pdf  used on input line 34.
+Package pdftex.def Info: group4_draft_4-002.pdf  used on input line 32.
 (pdftex.def)             Requested size: 375.80544pt x 375.79955pt.
 [1
 
@@ -229,17 +229,17 @@ Package pdftex.def Info: group4_draft_4-002.pdf  used on input line 34.
 <group4_draft_4-003.pdf, id=12, 578.16pt x 578.16pt>
 File: group4_draft_4-003.pdf Graphic file (type pdf)
 <use group4_draft_4-003.pdf>
-Package pdftex.def Info: group4_draft_4-003.pdf  used on input line 40.
+Package pdftex.def Info: group4_draft_4-003.pdf  used on input line 38.
 (pdftex.def)             Requested size: 375.80544pt x 375.79955pt.
 [2 <./group4_draft_4-002.pdf>]
-LaTeX Font Info:    Trying to load font information for T1+cmtt on input line 53.
+LaTeX Font Info:    Trying to load font information for T1+cmtt on input line 51.
 (/Users/jian/Library/TinyTeX/texmf-dist/tex/latex/base/t1cmtt.fd
 File: t1cmtt.fd 2022/07/10 v2.5l Standard LaTeX font definitions
 ) [3 <./group4_draft_4-003.pdf>]
 <group4_draft_4-005.pdf, id=40, 794.97pt x 433.62pt>
 File: group4_draft_4-005.pdf Graphic file (type pdf)
 <use group4_draft_4-005.pdf>
-Package pdftex.def Info: group4_draft_4-005.pdf  used on input line 73.
+Package pdftex.def Info: group4_draft_4-005.pdf  used on input line 71.
 (pdftex.def)             Requested size: 375.80544pt x 204.9924pt.
 
 !pdfTeX error: pdflatex (file ./group4_draft_4-006.pdf): PDF inclusion: required page does not exist <0>
