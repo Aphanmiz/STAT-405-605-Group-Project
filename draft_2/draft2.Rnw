@@ -1,0 +1,208 @@
+\documentclass[10pt]{article}
+
+% Formatting packages below.
+\usepackage[left=1in,right=1in,top=1in,bottom=1in]{geometry}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{graphicx}
+
+\begin{document}
+\SweaveOpts{concordance=TRUE}
+\title{Interpreting Causal Relationships between Contributing Factors and Motor Vehicle Accidents in the New York Metropolitan Area}
+\author{Jian Ruan, Zach Yu, Carrie Hashimoto, Sophia Lyu (Undergraduate), Patrick Yee (Graduate)}
+\maketitle
+
+% Install some packages
+<<install_packs, eval=TRUE, dev="png", echo=FALSE>>=
+# # UNCOMMENT THIS CELL IF RUNNING ON A NEW MACHINE
+# packs <- c("`ae.sty'","`grfext.sty'", "`caption.sty'", "'subcaption.sty'")
+# 
+# for (i in 1:length(packs)) {
+#     tinytex::parse_install(text = paste('! LaTeX Error: File', packs[i],'not found.'))
+# }
+# ggplot
+#install.packages("ggplot2",  repos="http://cran.us.r-project.org")
+#uninstall.packages("ggmap")
+library(ggplot2)
+@
+
+% Get data
+<<import_data, eval=TRUE, dev="png", echo=FALSE>>=
+
+# Primary data here.
+data.all <- read.csv("C:/Users/16464/Desktop/605 stat!/project files/draft2/Motor_Vehicle_Collisions_-_Crashes.csv")
+
+# Weather data here.
+data.weather <- read.csv("C:/Users/16464/Desktop/605 stat!/project files/draft2/weatherdataJFK.csv")
+
+# Length of primary data
+n <- 1968341
+
+# Text theme, used in ggplot for formatting.
+text.theme = theme(
+  axis.title.x = element_text(size = 16),
+  axis.text.x = element_text(size = 14),
+  axis.title.y = element_text(size = 16),
+  plot.title= element_text(size=20))
+@
+\section{Introduction.}
+
+\section{Second plots}
+Test
+% -------------------------
+% 2. PDF contour
+% -------------------------
+\begin{figure}[H]
+\centering
+    \begin{minipage}{0.45\textwidth}
+<<echo=FALSE, width=8, height=8, fig=TRUE>>=
+{ # Contour plot
+  
+  # This takes times and rturns the 15-min interval in which they lie
+  time2bin <- function(time){
+    holder <- strsplit(time, ":")[[1]]
+    hours <- as.numeric(holder[1])
+    mins <- as.numeric(holder[2])
+    time.in.mins <- ceiling(4*hours + mins/15)
+    return(time.in.mins)
+  }
+  crash.bins <- c()
+  set.seed(123)
+  
+  # Sample 10000 because it's very slow on 2mil entries
+  times <- data.all$CRASH.TIME[sample(1:n, size=10000, replace=FALSE)]
+  for(time in times) {crash.bins <- append(crash.bins, time2bin(time))}
+  crash.bins.df <- data.frame(time=crash.bins)
+  
+  # Plot
+  ggplot(data=crash.bins.df) + aes(x=time) + geom_density(fill="red", alpha=0.25) + xlab("24 hour cycle") + ylab("Proportion of crashes/time") + scale_x_continuous(breaks=c(0, 24, 48, 72, 96), labels=c("12.00A", "6.00A", "12.00P", "6.00P", "12.00A")) + geom_vline(xintercept=68, col="blue") + ggtitle("Density function for crashes (daily)") + text.theme
+}
+@
+        \caption{Density of accidents over 24 hour periods. (Maximum occurs at 5.00P)}
+    \end{minipage}
+\end{figure}
+% -------------------------
+% 3. Ribbons for months
+% -------------------------
+\begin{figure}[H]
+\centering
+    \begin{minipage}{0.45\textwidth}
+<<echo=FALSE, width=8, height=8, fig=TRUE>>=
+{ # Ribbon plot
+  convert.date <- function(date){
+    # Automatically detects date format and makes conversion
+    holder <- strsplit(date, "/")[[1]]
+    typecheck = (length(holder)>1)
+    if (typecheck){
+      return(paste0(holder[3], "-", holder[1], "-", holder[2]))
+    } else {
+      holder <- strsplit(date, "-")[[1]]
+      return(paste0(holder[2], "/", holder[3], "/", holder[1]))
+    }
+  }
+  # Build crash data/day df
+  # ---------- THIS CODE MAY COME IN HANDY LATER!
+  dates.raw <- data.all$CRASH.DATE
+  dates <- data.weather$DATE
+  crashcounts.date <- c()
+  for (date in dates){
+    crashcounts.date <- append(crashcounts.date, length(dates.raw[dates.raw==convert.date(date)]))
+  }
+  
+  datecount.df <- data.frame(date=dates, num.crashes=crashcounts.date)
+  # ----------
+  # Calc monthly statistics
+  oldmonth <- "01"
+  month.stats <- c()
+  monthcounts <- c()
+  for (j in 1:3652){
+    newmonth <- substr(dates[j], 6, 7)
+    
+    # If month changes, add stats to result vector and reset monthcounts.
+    if (newmonth!=oldmonth) {
+      oldmonth <- newmonth
+      month.stats <- append(month.stats, mean(monthcounts))
+      month.stats <- append(month.stats, min(monthcounts))
+      month.stats <- append(month.stats, max(monthcounts))
+      monthcounts <- c()
+      
+    # Otherwise, add day's count to monthcounts
+    } else {
+      monthcounts <- append(monthcounts, crashcounts.date[j])
+    }
+  }
+  result <- matrix(month.stats, ncol=3, byrow=TRUE)
+  
+  # Make ribbon plot
+  ribbon.df <- data.frame(idx=1:119, avg=result[, 1], mins=result[, 2], maxis=result[, 3])
+  ggplot(ribbon.df) + geom_line(aes(x=idx, y=avg), col="blue") + geom_ribbon(aes(ymin=mins, ymax=maxis, x=idx), alpha=0.25) + xlab("Time") + ylab("Num crashes (mean, min, max)") + scale_x_continuous(breaks=c(0, 24, 48, 72, 96, 120), labels=c("2013", "2015", "2017", "2019", "2021", "2023")) + ggtitle("Mean, min and max crashes/month") + text.theme
+}
+@
+        \caption{There is a sudden decrease in number of accidents coinciding with the start of the COVID-19 pandemic.}
+    \end{minipage}
+\end{figure}
+
+% -------------------------
+% #1 Maps
+% -------------------------
+\begin{figure}[H]
+\centering
+    \begin{minipage}{0.45\textwidth}
+<<echo=FALSE, width=8, height=8, fig=TRUE>>=
+{ # Contour plot
+  #0. Import library
+#install.packages("ggmap")
+#install.packages("vctrs")
+#install.packages("rccp")
+library(ggmap) #Retrieve raster map tiles from popular mapping services
+library(osmdata) #OpenStreetMap data
+library(pacman) #Base library > intuitively named functions
+
+library(leaflet)
+library(rgdal)
+library(tidyr)
+
+library(ggridges)
+
+#1. Import data
+nyc_crash <- data.all
+str(nyc_crash)
+
+#2. Clean data - get rid of NA
+nyc_crash %>%
+  drop_na('LATITUDE') %>%
+  drop_na('LONGITUDE')  -> nyc_crash_noNA
+
+#3. GIS data from OpenStreetMap
+
+#3.1 Static NYC Map
+pacman::p_load(ggmap, osmdata)
+nyc_map <- lisbon_map <- get_map( getbb('new york city'), source="stamen") #Google Map requires key to API, but stamen doesn't.
+
+g <- ggmap(nyc_map)
+
+# Map the crash occurance on the map
+dist_map <- g + geom_point(data=nyc_crash_noNA, aes(x=LONGITUDE, y=LATITUDE),size=0.0001, alpha=0.1, color="blue") + labs(title = "Geographical Distribution of Crash Occurances", y = "LONGITUDE", x = "LATITUDE")
+
+print(dist_map)
+
+#
+countour_map <- g  + stat_density2d(
+    aes(x = LONGITUDE, y = LATITUDE, fill = ..level.., alpha = 0.1),
+    size = 0.1, bins = 40, data = nyc_crash_noNA,
+    geom = "polygon"
+  ) + geom_density2d(data = nyc_crash_noNA, aes(x = LONGITUDE, y = LATITUDE), size = 0.3) + labs(title = "Countour Map of Crash Occurances", y = "LONGITUDE", x = "LATITUDE")
+print(countour_map)
+
+
+}
+@
+        \caption{}
+    \end{minipage}
+\end{figure}
+
+
+
+\end{document}
