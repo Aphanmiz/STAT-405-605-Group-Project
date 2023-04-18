@@ -1,0 +1,371 @@
+---
+title: "Motor Vehicle Accidents in New York - Analyze The Past & Model The Future" 
+author: "Group 4: \n Jian Ruan, Zach Yu, Carrie Hashimoto, Sophia Lyu (Undergraduate), \n Patrick Yee (Graduate) "
+date: "April 20, 2023"
+output: 
+  ioslides_presentation:
+    widescreen: true
+header-includes:
+  - \usepackage{titlesec}
+  - \titleformat*{\section}{\small\bfseries}
+right: 1 inch
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## Overview 
+```{r, echo=FALSE, include=TRUE, fig.align='center',out.width="100%"}
+knitr::include_graphics("ML_workflow.png")
+```
+
+## Introduction
+- Our analysis of New York car crashes began by exploring the data through simple correlation of car crash factors
+
+- Discovery of the significant decrease in car crash data around the onset of the Covid-19 pandemic
+
+- Led us to see the different effects of Covid-19 on New York City Car Crashes
+
+- Began modeling other potential car crash factors to better predict number of car crashes
+
+
+## 0. Data Preparation
+
+- **Our Primary Dataset**:
+
+	- A list of all motor vehicle accidents in New York City collected between 1 January 2013 and 31 December 2022 by the New York Police Department
+	
+```{r, echo=FALSE, message=FALSE}
+data <- read.csv("Motor_Vehicle_Collisions_-_Crashes.csv")
+colnames(data)[1]
+```
+
+- **Secondary Datasets**:
+
+  - New York weather data collected by JFK airport
+  - Headlines from every New York Times article
+
+
+## 1. Exploratory Data Analysis (EDA) 
+
+## 2. Machine Learning - Gradient Boosting
+
+
+## 3. Feature Engineering
+```{r}
+data.all <- read.csv("Motor_Vehicle_Collisions_-_Crashes.csv")
+data.weather <- read.csv("weatherdataJFK.csv")
+
+# Plot precip vs num crashes and do regression
+convert.date <- function(date){
+  # Automatically detects date format and makes conversion
+  holder <- strsplit(date, "/")[[1]]
+  typecheck = (length(holder)>1)
+  if (typecheck){
+    return(paste0(holder[3], "-", holder[1], "-", holder[2]))
+  } else {
+    holder <- strsplit(date, "-")[[1]]
+    return(paste0(holder[2], "/", holder[3], "/", holder[1]))
+  }
+}
+
+dates <- data.all$CRASH.DATE[order(data.all$CRASH.DATE)]
+datecounts <- table(dates)
+weather.sort <- data.weather[order(data.weather$DATE), c(2, 4)]
+
+# Build x,y coords and assemble df
+xvals <- c()
+yvals <- c()
+for (j in 1:length(weather.sort$DATE)){
+  xvals[j] <- weather.sort[j, 2]
+  yvals[j] <- datecounts[[convert.date(weather.sort[j, 1])]]
+}
+prec.crashes.df <- data.frame(precipitation=xvals, num.crashes=yvals)
+
+# Make linear model
+linmodel <- lm(num.crashes ~ precipitation, data=prec.crashes.df)
+plot(xvals, yvals, xlab="Preciptation (inches/day", ylab="Num accidents",
+     col="blue", pch=".", main="Num. Crashes vs Precip.")
+abline(linmodel$coefficients[[1]], linmodel$coefficients[[2]], col="red")
+```
+
+Secondary dataset:
+Weather
+Annual ridership beginning 2014
+Monthly ridership beginning 2008
+Metro service delivered beginning 2019
+
+
+## 4 Parameter Tuning
+
+- Hyperparameters: parameters that are set before the training of a model
+  - eta (learning rate)
+  - N (number of boosting iterations)
+  - MAD (mean absolute deviation)
+  - RMSE (root mean squared error)
+  - labels
+  - num.leaves
+  
+- Goal:
+  - Improve the accuracy of a ML model by finding the best set of hyperparameters. 
+  - Prevent overfitting / underfitting
+
+```{r, include=FALSE}
+# Killer plot setup.
+{
+library(grid)
+library(stringi)
+library(stringr)
+# Tree helper.
+{
+draw_tree <- function(input_string, # String of labels. (See: "labels" field of xgb_trees_data.csv)
+                        x=100, y=100, # Coordinates of root vertex.
+                        height=500, width=500, # How (physically) big the tree should be.
+                        tree.depth=3, # How deep did we specify trees to be when we trained xgb?
+                        plot_tree=FALSE, # Do you want to visualize the tree using base plots?
+                        font_size=3 # Label font size.
+                        ){
+    # DESCRIPTION:
+      # This function takes in a string of labels separated by commons, for example:
+      # "wind < 28.2999992, numCrashes < 877.5, wind < 28.6350002, snow < 5.30000019, precip < 0.0799999982, Leaf, wind < 29.6349983, Leaf, Leaf, Leaf, Leaf, Leaf, Leaf"
+      # and calculates all the information needed to turn those labels into a binary tree.
+      # Also visualizes the tree if plot_tree==TRUE.
+    
+    # Outputs:
+      # Coordinates of vertices
+      # Corresponding text labels
+      # Start and endpoint vertices of segments
+    
+    require(stringi)
+    require(stringr)
+    labels.raw <- strsplit(input_string, ", ")[[1]]
+    
+    # First, calculate possible vertex locations based on plotting parameters.
+    {
+      x.vertices <- c()
+      y.vertices <- c()
+      vstep <- height/tree.depth
+      
+      for (depth.ticker in 0:tree.depth) {
+        num.vertices.in.row <- 2^(depth.ticker)
+        hstep <- width/(num.vertices.in.row+1)
+        for (width.ticker in 1:num.vertices.in.row) {
+          x.vertices <- append(x.vertices, x+(width.ticker)*hstep)
+          y.vertices <- append(y.vertices, y+(depth.ticker)*vstep)
+        }
+      }
+      x.vertices <- x.vertices - width/2
+    }
+    
+    # Next, assign labels and prune vertices that don't exist.
+    {
+      num.vertices <- length(x.vertices)
+      labels.fixed <- rep("HOLDER", times=num.vertices)
+      labels.fixed[1] <- labels.raw[1]
+      label.tracker <- 2
+      for (j in 2:num.vertices) {
+        parent <- floor(j/2)
+        if (labels.fixed[parent]=="Leaf" | labels.fixed[parent]== "hehe") {
+          labels.fixed[j] <- "hehe"
+        } else {
+          labels.fixed[j] <- labels.raw[label.tracker]
+          label.tracker <- label.tracker+1
+        }
+      }
+    }
+    
+    # Calculate where edges need to be.
+    {
+      segments.start.x <- c()
+      segments.start.y <- c()
+      segments.end.x <- c()
+      segments.end.y <- c()
+      
+      for (j in 2:num.vertices){
+        parent <- floor(j/2)
+        if (!(labels.fixed[parent]=="Leaf" | labels.fixed[parent]=="hehe")) {
+          segments.start.x <- append(segments.start.x, x.vertices[parent])
+          segments.start.y <- append(segments.start.y, y.vertices[parent])
+          segments.end.x <- append(segments.end.x, x.vertices[j])
+          segments.end.y <- append(segments.end.y, y.vertices[j])
+        }
+      }
+    }
+    
+    # Only keep plotted vertices and format labels.
+    {
+      x.vertices.plot <- x.vertices[labels.fixed!="hehe"]
+      y.vertices.plot <- y.vertices[labels.fixed!="hehe"]
+      labels.plot <- c()
+      for (label in labels.raw) {
+        if (label=="Leaf") {
+          labels.plot <- append(labels.plot, " ")
+        } else {
+          labels.plot <- append(labels.plot, str_replace(label, "<", "\n<"))
+        }
+      }
+    }
+    
+    # If plot_tree=TRUE, then make a plot.
+    {
+        if (plot_tree) {
+        plot(x.vertices.plot, y.vertices.plot)
+        text(x.vertices.plot, y.vertices.plot, labels.plot, cex=font_size)
+        segments(segments.start.x,
+                 segments.start.y,
+                 segments.end.x,
+                 segments.end.y
+                 )
+      }
+    }
+    
+    # Clean up and end :3
+    {
+      rm(hstep)
+      rm(vstep)
+      rm(label.tracker)
+      rm(labels.fixed)
+      rm(num.vertices)
+      rm(parent)
+      rm(width.ticker)
+      rm(x.vertices)
+      rm(y.vertices)
+      rm(x)
+      rm(y)
+      rm(tree.depth)
+      rm(height)
+      rm(width)
+      
+      result <- list(x.vertices.coords=x.vertices.plot,
+                     y.vertices.coords=y.vertices.plot,
+                     segments.start.x=segments.start.x,
+                     segments.start.y=segments.start.y,
+                     segments.end.x=segments.end.x,
+                     segments.end.y=segments.end.y,
+                     labels=labels.plot)
+    }
+    
+    return(result)
+}
+}
+# Import data.
+MADs <- read.csv("heatmapgrid.csv")
+tree_data <- read.csv("xgb_trees_data.csv")
+# Driver.
+make_killer_plot <- function(eta, N){
+  # 1. Heatmap -- returns matrix of colors.
+    {
+    MADsFlat <- as.vector(as.matrix(MADs))
+    MADsSorted <- sort(MADsFlat)
+    colors <- colorRampPalette(c("darkgreen", "white"))(420)
+    colorMatrix <- c()
+    for (MAD in MADsFlat) {
+      colorMatrix <- append(colorMatrix,
+                            colors[which(MADsSorted==MAD)][1])
+    }
+    colorMatrix <- matrix(colorMatrix, nrow=nrow(MADs))
+  }
+  
+  # 2. Plot.
+  {
+    grid.newpage()
+    vp <- viewport(x = 0.5, y = 0.5,
+              height = 1, width = 1,
+              xscale = c(0, 1), yscale = c(1, 20))
+    pushViewport(vp)
+    grid.raster(colorMatrix, width=1, height=1)
+    
+    ## 0.05 increments for x
+    # grid.xaxis(at=seq(from=0,to=1,by=0.05))
+    ## 1 increments for y
+    # grid.yaxis(at=seq(from=1,to=20,by=1))
+    
+    # grid.text("X = eta (learning rate 0~1), Y = N (# of boosting iterations 1~20)", x = unit(0.5, "npc"), y = unit(-0.1, "npc"), just = c("center", "top"))
+    
+    # Tree time
+    row <- 400*eta + N
+    label <- tree_data$labels[row]
+    label <- str_replace_all(label, "\\b\\d+\\.\\d+\\b", function(x) as.character(round(as.numeric(x), 3)))
+    res <- draw_tree(label,
+                     x=eta, y=N,
+                     height=2.5,width=0.3,
+                     plot_tree=FALSE)
+    
+    grid.segments(x0 = unit(res$segments.start.x, "native"), y0 = unit(res$segments.start.y, "native"),
+               x1 = unit(res$segments.end.x, "native"), y1 = unit(res$segments.end.y, "native"),
+               arrow = NULL,
+               name = NULL, gp = gpar(col="white"), draw = TRUE)
+  grid.points(x=unit(res$x.vertices.coords,"native"),
+              y=unit(res$y.vertices.coords,"native"),pch=21,
+              size=unit(0.01,"npc"),gp=gpar(col="white",fill="blue"))
+  text <- textGrob(res$labels,x=unit(res$x.vertices.coords,"native"),
+            y=unit(res$y.vertices.coords,"native"),
+            gp=gpar(fontsize=6,col="white"), rot = -15)
+  grid.draw(text)
+  treeMAD <- tree_data$MAD[row]
+  grid.draw(textGrob(
+    paste0("MAD: ", treeMAD),
+    x=unit(eta, "native"),
+    y=unit(N-0.6, "native"),
+    gp=gpar(fontsize=10,col="white")
+  ))
+    
+    popViewport()
+    
+    
+  }
+}
+}
+```
+
+##
+```{r, echo=FALSE}
+library(shiny)
+# Define UI. ----
+ui <- fluidPage(
+  titlePanel("3.2 Killer Plot:  XGBoost Hyperparamter Tuning"),
+  sidebarLayout(
+    sidebarPanel(
+      # Slider for eta.
+      sliderInput("eta", "eta: Learning rate",
+                  min=0, max=1,
+                  value=0.55, step=0.05),
+      
+      # Slider for N.
+      sliderInput("N", "N: Number of boosting iterations",
+                  min = 1, max = 20,
+                  value = 11)
+    ),
+    mainPanel(
+      plotOutput("killerPlot")
+    )
+  )
+)
+# Define server backend. ----
+server <- function(input, output) {
+   
+   output$killerPlot <- renderPlot({
+      # Retrieve variables.
+     N <- input$N
+     eta <- input$eta
+     
+     # Run plotting fn.
+     make_killer_plot(eta, N)
+   })
+}
+# Run shiny.
+shinyApp(ui=ui, server=server)
+```
+
+## 5. Model Evaluation
+
+
+## Conclusion / Future Analysis
+
+- There is a significant decrease in overall transportation before and after COVID-19 in New York City
+
+- Modeling and accounting for different factors within New York City (weather, mentions of pandemic-related terms, etc…) can be used predict number of crashes in a given time period
+
+- More factors need to be accounted for a better prediction model, which can be utilized by emergency city personnel (police, hospital workers) to better predict amount of crashes in a day 
