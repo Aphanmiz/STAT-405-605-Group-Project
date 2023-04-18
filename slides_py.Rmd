@@ -1,0 +1,118 @@
+---
+title: "slides_py"
+output: ioslides_presentation
+date: '2023-04-18'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# Libraries.
+{
+  library(RSQLite)
+  library(ggplot2)
+  library(stringi)
+  library(stringr)
+  library(xgboost)
+  library(caret)
+  library(DiagrammeR)
+}
+```
+
+## Evaluation.
+```{r, include=FALSE}
+# Assemble train/test.
+{
+  dfAllData.clean <- read.csv("training_data.csv")
+  
+  # Split.
+  set.seed(1234)
+  split.indices <- sample(c(TRUE, FALSE),
+                          nrow(dfAllData.clean),
+                          replace=TRUE, prob=c(0.9, 0.1))
+  train.data <- dfAllData.clean[split.indices, ]
+  test.data <- dfAllData.clean[!split.indices, ]
+  
+  # Reformat so xgb is happy :)
+  label.idx <- dim(test.data)[2]
+  train.data.matrix <- data.matrix(train.data[ , -label.idx])
+  train.label <- train.data$label
+  
+  rm(split.indices)
+}
+
+# boosting szn
+{
+  xgb.model <- xgboost(data=train.data.matrix,
+                   label=train.label,
+                   max.depth=4,
+                   nrounds=20,
+                   eta=0.3,
+                   verbose=TRUE,
+                   objective="reg:squarederror")
+  # model$evaluation_log
+}
+
+# Evaluate.
+{
+  # Make test.
+  test.data.matrix <- data.matrix(test.data[ , -label.idx])
+  test.label <- test.data$label
+  
+  # Predict.
+  xgb.predictions <- predict(xgb.model, test.data.matrix)
+  xgb.mad <- mean(abs(test.label - xgb.predictions))
+  xgb.mad
+  
+  # Plot predictions on test.
+  plot_data <- data.frame(xvals=as.numeric(rownames(test.data)),
+                          actual_value=test.label,
+                          predicted_value=xgb.predictions)
+}
+```
+```{r, message=FALSE, echo=FALSE}
+# GGplot.
+{
+  ggplot(data=plot_data) +
+    geom_point(aes(x=xvals, y=actual_value), col="black") +
+    geom_point(aes(x=xvals, y=predicted_value), col="red", alpha=0.5) +
+    ggtitle("XGBoost results.", subtitle=paste0("MAD = ", xgb.mad)) +
+    geom_segment(aes(x=xvals, y=actual_value, xend=xvals, yend=predicted_value),
+                 col="darkgreen", alpha=0.2) +
+    geom_segment(aes(x=0, y=0, xend=0, yend=xgb.mad), col="darkgreen") +
+    xlab("Actual and predicted crash count.") + ylab("Time.") +
+    scale_x_continuous(breaks=c(185, 915, 1645, 2375, 3105, 3835),
+                       labels=c("2013", "2015", "2017", 2019, 2021, 2023))
+}
+```
+
+
+## Machine Learning vs Regression.
+```{r, include=FALSE}
+# Compare to regression. (Hardcoding in this cell.)
+{
+  # This regression is hard-coded.
+  lin.model <- lm(data=dfAllData.clean, label~
+                    numCrashes+
+                    wind+
+                    precip+
+                    snow+
+                    propMentions)
+  
+  lin.mad <- mean(abs(lin.model$residuals))
+  
+  lin.model.test <- predict(lin.model, test.data[, 1:10])
+  lin.res.test <- abs(lin.model.test-test.data$label)
+  lin.res.test <- lin.res.test[!is.na(lin.res.test)]
+  lin.mad.test <- mean(lin.res.test)
+}
+
+# Assemble evals into table that looks nice :)
+{
+  mad.table <- data.frame(XGBoost=c(NA, xgb.mad), Regression=c(lin.mad.test, lin.mad))
+  row.names(mad.table) <- c("Training set", "Test set")
+}
+```
+-XGBoost performs moderately better than regression.
+```{r, message=FALSE}
+mad.table
+```
